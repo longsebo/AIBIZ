@@ -1,39 +1,135 @@
-# AIBIZ
+# AIBIZ 开源中台
+## 项目介绍
+AIBIZ 是一套基于 **RuoYi-Vue3（SpringBoot4 + Jakarta + JDK17+）** 全新开发的AI驱动型低代码业务中台，内置Flowable流程引擎，一站式覆盖基础OA、简易ERP、HR人事、DRP分销等通用业务能力。
 
-#### 介绍
-基于若依 Vue3 开发，整合 OA、ERP、HR、DRP 多业务。
-首页默认隐藏侧边菜单，空白对话界面搭配底部指令输入框；左上角三横线可展开完整菜单用于系统配置。
-输入文字指令即可展示数据列表、弹出新增表单，依托 AI 语义解析驱动业务，支持私有化大模型对接，容器化快速部署。
+### 核心差异化特色（开源社区核心亮点）
+1. **对话式交互首页，颠覆传统后台操作**
+默认隐藏左侧功能菜单，全屏轻量化对话空白面板，底部常驻AI指令输入框；仅左上角三横线按钮展开完整管理菜单，专门用于系统配置、权限维护、流程画布编辑。
+2. **自然语言驱动业务，零点击操作页面**
+输入文本指令即可一键唤起数据列表、弹窗新增/编辑表单、执行数据查询，内置前端本地指令词库解析，开箱即用无需复杂配置。
+3. **原生集成Flowable流程编排引擎**
+支持可视化BPMN画布拖拽编排逻辑节点，服务任务可调用Java业务类获取返回值，通过流程变量完成数据透传、分支条件判断，同时支撑日常审批与零代码业务逻辑编排。
+4. **轻量化私有化AI兼容**
+原生预留大模型对接接口，可快速接入本地私有化大模型，实现语义识别、智能指令扩展。
+5. **容器化一键部署**
+提供完整Docker镜像、初始化SQL脚本，单机环境开箱即用，无需复杂环境配置。
 
-#### 软件架构
-软件架构说明
+> 区分说明：本仓库为**社区开源单机版**，单租户架构，满足个人开发者、小微企业单机业务使用；多租户SaaS、微服务集群、第三方深度连接器、合规审计等企业级能力为商业闭源扩展包。
 
+## 软件架构
+### 技术栈
+#### 后端
+- 基础框架：SpringBoot 4.x、Spring 7、Jakarta Servlet
+- 持久层：MyBatis-Plus、MySQL 8.0
+- 流程引擎：Flowable 8.0 流程编排引擎
+- 工具组件：Redis、Quartz定时任务、Hutool工具包、Swagger接口文档
+- 运行环境：JDK 17 / JDK 21
 
-#### 安装教程
+#### 前端
+- 技术栈：Vue3 + Vite + Element Plus
+- 配套仓库：https://gitee.com/ys-gitee/RuoYi-Vue3
+- 特色模块：AI对话交互面板、指令解析组件、流程BPMN绘图面板
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+### 分层架构设计
+1. 基础底座层：若依原生权限、字典、参数、文件管理、代码生成器（完全开源）
+2. AI交互层：对话首页、指令解析引擎、大模型对接适配器（开源核心特色）
+3. 业务模块层：简易OA、HR人事、基础ERP、DRP分销单租户能力（开源）
+4. 流程编排层：Flowable基础BPMN、服务任务、变量传递、分支网关（开源）
+5. 扩展扩展层：多租户、微服务、信创适配、第三方系统连接器（商业闭源，独立Jar依赖）
 
-#### 使用说明
+## 安装教程
+### 环境要求
+1. JDK ≥ 17
+2. MySQL ≥ 8.0
+3. Redis ≥ 6.2
+4. Node.js ≥ 18
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+### 本地部署步骤
+1. 克隆仓库
+```bash
+# Gitee国内地址（推荐）
+git clone https://gitee.com/longsebo/aibiz.git
+# GitHub同步镜像
+git clone https://github.com/longsebo/aibiz.git
+```
+2. 初始化数据库
+执行 `sql/aibiz_community.sql` 脚本，创建业务库并导入基础数据
+3. 修改配置文件
+`application-dev.yml` 配置数据库、Redis连接地址
+4. 后端启动
+启动 `AibizApplication.java` 主类，默认端口8080
+5. 前端启动
+进入前端目录，执行依赖安装与启动
+```bash
+npm install
+npm run dev
+```
+6. 访问系统
+浏览器打开 http://localhost:80
+默认账号：admin / 默认密码：admin123
 
-#### 参与贡献
+### Docker容器一键部署
+1. 项目根目录执行打包
+```bash
+mvn clean package -DskipTests
+```
+2. 使用内置Dockerfile构建镜像
+3. docker-compose启动整套服务（MySQL+Redis+应用一体化）
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+## 使用说明
+1. **AI对话快速上手**
+进入首页直接在底部输入指令，示例：
+- 用户列表：弹出人员管理表格
+- 新增部门：弹窗快速创建部门
+- 我的待办：展示Flowable流程审批任务
+2. **系统配置入口**
+点击左上角三横线图标，展开完整侧边菜单，可操作权限、角色、流程画布、参数配置
+3. **流程编排使用**
+菜单进入【流程设计】，拖拽BPMN节点搭建业务逻辑，支持调用自定义Bean、变量传递、条件分支
+4. **私有化大模型对接**
+系统配置-AI参数中填入模型接口地址、密钥，即可启用智能语义解析
 
+### 开源/商业功能边界
+#### ✅ 社区开源免费包含
+- AI对话交互完整功能、单租户权限体系
+- Flowable基础流程编排、审批功能
+- 基础OA/HR/简易ERP/DRP单机业务模块
+- Docker单机部署、接口文档、完整基础代码
+- 个人、小微企业商用无授权费用
 
-#### 特技
+#### ⚠️ 商业版付费扩展（独立闭源Jar包）
+- 多租户SaaS数据隔离、分库分表
+- 微服务集群、分布式事务、Nacos注册中心
+- 钉钉/企业微信/LDAP单点登录、ERP深度连接器
+- 流程监控大屏、操作审计日志、数据水印脱敏
+- 信创数据库（达梦/人大金仓）、国产化服务器适配
+- 一对一技术支持、定制开发、年度版本升级服务
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+## 参与贡献
+1. Fork 本仓库
+2. 新建功能分支 `Feat_xxx` / 修复分支 `Fix_xxx`
+3. 本地完成代码编写、自测
+4. 提交 Commit，规范注释提交内容
+5. 提交 Pull Request，等待审核合并
+
+## 同步说明
+本仓库为主仓库（Gitee），已配置自动镜像同步至GitHub；所有代码提交仅在Gitee操作，请勿直接在GitHub提交代码，避免同步冲突。
+
+## 开源协议
+本社区版项目采用 **Apache 2.0** 开源协议，可免费学习、商用，二次分发需保留项目版权声明；商业扩展模块需购买官方授权方可商用。
+
+## 特技
+1. 多语言文档支持：`Readme_zh.md`（中文）、`Readme_en.md`（英文）
+2. Gitee 官方资源指引
+    - Gitee 官方博客：blog.gitee.com
+    - Gitee优秀开源项目广场：https://gitee.com/explore
+    - GVP（Gitee最有价值开源项目）评选通道
+    - Gitee使用手册：https://gitee.com/help
+    - Gitee封面人物展示：https://gitee.com/gitee-stars/
+3. 仓库配套资源
+    - 一键部署Docker脚本
+    - Flowable示例流程BPMN模板
+    - 私有化大模型对接示例配置文件
+    - 开发文档、部署文档、功能演示文档
+4. 交流渠道
+    仓库Issue提交Bug与需求；商业授权、定制开发请联系仓库作者。
