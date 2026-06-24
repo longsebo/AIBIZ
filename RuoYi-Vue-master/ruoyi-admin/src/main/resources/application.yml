@@ -66,8 +66,9 @@ spring:
   # 服务模块
   devtools:
     restart:
+      exclude: org/apache/poi/**,org/apache/poi/ss/**,org/apache/poi/xssf/**,META-INF/maven/org.apache.poi/**
       # 热部署开关
-      enabled: true
+      enabled: false
   data:
     # redis 配置
     redis:
