@@ -84,9 +84,10 @@
             <!-- 不写版本，从父POM继承 -->
         </dependency>
         <!-- POI OOXML Schemas - 解决 org.openxmlformats 包缺失 -->
+        <!-- POI 5.x 使用 lite 替代 schemas -->
         <dependency>
             <groupId>org.apache.poi</groupId>
-            <artifactId>poi-ooxml-schemas</artifactId>
+            <artifactId>poi-ooxml-lite</artifactId>
         </dependency>
         <!-- Token生成与解析-->
         <dependency>

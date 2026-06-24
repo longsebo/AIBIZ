@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AiCommandMapMapper">
+
+    <resultMap type="com.ruoyi.system.domain.AiCommandMap" id="AiCommandMapResult">
+        <result property="id" column="id"/>
+        <result property="command" column="command"/>
+        <result property="commandType" column="command_type"/>
+        <result property="menuPath" column="menu_path"/>
+        <result property="menuName" column="menu_name"/>
+        <result property="sort" column="sort"/>
+        <result property="status" column="status"/>
+        <result property="remark" column="remark"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <sql id="selectAiCommandMapVo">
+        select id, command, command_type, menu_path, menu_name, sort, status, remark, create_time, update_time
+        from ai_command_map
+    </sql>
+
+    <select id="selectAiCommandMapList" parameterType="com.ruoyi.system.domain.AiCommandMap" resultMap="AiCommandMapResult">
+        <include refid="selectAiCommandMapVo"/>
+        <where>
+            <if test="command != null and command != ''">
+                AND command like concat('%', #{command}, '%')
+            </if>
+            <if test="commandType != null and commandType != ''">
+                AND command_type = #{commandType}
+            </if>
+            <if test="menuPath != null and menuPath != ''">
+                AND menu_path = #{menuPath}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        order by sort
+    </select>
+
+    <select id="selectAiCommandMapById" parameterType="Long" resultMap="AiCommandMapResult">
+        <include refid="selectAiCommandMapVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectAiCommandMapByCommand" parameterType="String" resultMap="AiCommandMapResult">
+        <include refid="selectAiCommandMapVo"/>
+        where status = '0' and command = #{command}
+    </select>
+
+    <select id="selectAiCommandMapAll" resultMap="AiCommandMapResult">
+        <include refid="selectAiCommandMapVo"/>
+        where status = '0'
+        order by sort
+    </select>
+
+    <insert id="insertAiCommandMap" parameterType="com.ruoyi.system.domain.AiCommandMap" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_command_map
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="command != null and command != ''">command,</if>
+            <if test="commandType != null and commandType != ''">command_type,</if>
+            <if test="menuPath != null and menuPath != ''">menu_path,</if>
+            <if test="menuName != null and menuName != ''">menu_name,</if>
+            <if test="sort != null">sort,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="remark != null and remark != ''">remark,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="command != null and command != ''">#{command},</if>
+            <if test="commandType != null and commandType != ''">#{commandType},</if>
+            <if test="menuPath != null and menuPath != ''">#{menuPath},</if>
+            <if test="menuName != null and menuName != ''">#{menuName},</if>
+            <if test="sort != null">#{sort},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="remark != null and remark != ''">#{remark},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateAiCommandMap" parameterType="com.ruoyi.system.domain.AiCommandMap">
+        update ai_command_map
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="command != null and command != ''">command = #{command},</if>
+            <if test="commandType != null and commandType != ''">command_type = #{commandType},</if>
+            <if test="menuPath != null and menuPath != ''">menu_path = #{menuPath},</if>
+            <if test="menuName != null and menuName != ''">menu_name = #{menuName},</if>
+            <if test="sort != null">sort = #{sort},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="remark != null and remark != ''">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteAiCommandMapById" parameterType="Long">
+        delete from ai_command_map where id = #{id}
+    </delete>
+
+</mapper>

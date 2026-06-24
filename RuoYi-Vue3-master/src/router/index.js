@@ -1,6 +1,7 @@
 import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
+import AiChatLayout from '@/layout/AiChatLayout.vue'
 
 /**
  * Note: 路由配置项
@@ -59,7 +60,7 @@ export const constantRoutes = [
   },
   {
     path: '',
-    component: Layout,
+    component: AiChatLayout,
     redirect: '/index',
     children: [
       {

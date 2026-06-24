@@ -26,7 +26,7 @@
         <fastjson.version>2.0.62</fastjson.version>
         <oshi.version>7.3.0</oshi.version>
         <commons.io.version>2.22.0</commons.io.version>
-        <poi.version>4.1.2</poi.version>
+        <poi.version>5.4.0</poi.version>
         <velocity.version>2.3</velocity.version>
         <jwt.version>0.9.1</jwt.version>
         <jaxb-api.version>2.3.1</jaxb-api.version>
@@ -111,10 +111,10 @@
                 <artifactId>poi-ooxml</artifactId>
                 <version>${poi.version}</version>
             </dependency>
-            <!-- POI OOXML Schemas - 解决 org.openxmlformats 包缺失 -->
+            <!-- POI 5.x 使用 lite 替代 schemas -->
             <dependency>
                 <groupId>org.apache.poi</groupId>
-                <artifactId>poi-ooxml-schemas</artifactId>
+                <artifactId>poi-ooxml-lite</artifactId>
                 <version>${poi.version}</version>
             </dependency>
             <!-- velocity代码生成使用模板 -->

@@ -5,6 +5,7 @@ Vue.use(Router)
 
 /* Layout */
 import Layout from '@/layout'
+import AiLayout from '@/layout/AiLayout'
 
 /**
  * Note: 路由配置项
@@ -63,7 +64,7 @@ export const constantRoutes = [
   },
   {
     path: '',
-    component: Layout,
+    component: AiLayout,
     redirect: 'index',
     children: [
       {
