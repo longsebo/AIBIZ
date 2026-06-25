@@ -173,6 +173,13 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <!-- 流程模块-->
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>ruoyi-flowable</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
