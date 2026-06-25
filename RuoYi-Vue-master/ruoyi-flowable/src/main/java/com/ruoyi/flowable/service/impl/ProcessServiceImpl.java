@@ -164,14 +164,20 @@ public class ProcessServiceImpl implements ProcessService {
             info.setName(t.getName());
             info.setProcessDefinitionId(t.getProcessDefinitionId());
             info.setProcessInstanceId(t.getProcessInstanceId());
-            info.setProcessDefinitionKey(t.getProcessDefinitionKey());
-            info.setProcessDefinitionName(t.getProcessDefinitionName());
-            info.setBusinessKey(t.getBusinessKey());
             info.setAssignee(t.getAssignee());
             info.setCreateTime(t.getCreateTime());
             info.setDueDate(t.getDueDate());
             info.setPriority(t.getPriority());
             info.setDescription(t.getDescription());
+            // 从历史流程实例获取额外信息
+            HistoricProcessInstance hpi = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(t.getProcessInstanceId()).singleResult();
+            if (hpi != null) {
+                info.setProcessDefinitionKey(hpi.getProcessDefinitionKey());
+                info.setProcessDefinitionName(hpi.getProcessDefinitionName());
+                info.setBusinessKey(hpi.getBusinessKey());
+                info.setStartUserId(hpi.getStartUserId());
+            }
             result.add(info);
         }
         return result;
@@ -252,15 +258,21 @@ public class ProcessServiceImpl implements ProcessService {
         info.setProcessDefinitionId(t.getProcessDefinitionId());
         info.setProcessInstanceId(t.getProcessInstanceId());
         info.setExecutionId(t.getExecutionId());
-        info.setProcessDefinitionKey(t.getProcessDefinitionKey());
-        info.setProcessDefinitionName(t.getProcessDefinitionName());
-        info.setBusinessKey(t.getBusinessKey());
         info.setAssignee(t.getAssignee());
         info.setCreateTime(t.getCreateTime());
         info.setDueDate(t.getDueDate());
         info.setPriority(t.getPriority());
         info.setDescription(t.getDescription());
         info.setOwner(t.getOwner());
+        // 从流程实例获取额外信息
+        org.flowable.engine.runtime.ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(t.getProcessInstanceId()).singleResult();
+        if (pi != null) {
+            info.setProcessDefinitionKey(pi.getProcessDefinitionKey());
+            info.setProcessDefinitionName(pi.getProcessDefinitionName());
+            info.setBusinessKey(pi.getBusinessKey());
+            info.setStartUserId(pi.getStartUserId());
+        }
         return info;
     }
 }
