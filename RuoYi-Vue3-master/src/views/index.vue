@@ -65,7 +65,7 @@
 <script setup>
 import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { listAll } from '@/api/system/aiCommand'
+import { listAll, aiMatch } from '@/api/system/aiCommand'
 import { loadView } from '@/store/modules/permission'
 
 const inputText = ref('')
@@ -165,6 +165,18 @@ async function parseCommand(command) {
         targetCommand = item
         break
       }
+    }
+  }
+
+  // 调用后端AI语义匹配
+  if (!targetCommand) {
+    try {
+      const res = await aiMatch(command)
+      if (res.code === 200 && res.data) {
+        targetCommand = res.data
+      }
+    } catch (e) {
+      console.error('AI匹配失败:', e)
     }
   }
 

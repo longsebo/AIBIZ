@@ -42,6 +42,15 @@ public interface IAiCommandMapService {
     public List<AiCommandMap> selectAiCommandMapAll();
 
     /**
+     * AI语义匹配指令
+     *
+     * @param userInput 用户输入
+     * @param commandList 可用指令列表
+     * @return 匹配的指令映射
+     */
+    public AiCommandMap aiMatchCommand(String userInput, List<AiCommandMap> commandList);
+
+    /**
      * 新增AI指令映射
      *
      * @param aiCommandMap AI指令映射

@@ -13,6 +13,15 @@ ruoyi:
   # 验证码类型 math 数字计算 char 字符验证
   captchaType: math
 
+# DeepSeek AI配置
+deepseek:
+  # API密钥（需要到DeepSeek官网申请）
+  api-key: sk-b15126d8e26a47b9ade01d61666bcff3
+  # API地址
+  api-url: https://api.deepseek.com/v1/chat/completions
+  # 模型名称
+  model: deepseek-chat
+
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080

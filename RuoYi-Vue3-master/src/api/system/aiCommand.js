@@ -8,6 +8,18 @@ export function listAll() {
   })
 }
 
+// AI语义匹配指令
+export function aiMatch(command) {
+  return request({
+    url: '/system/aiCommand/aiMatch',
+    method: 'post',
+    data: command,
+    headers: {
+      'Content-Type': 'text/plain'
+    }
+  })
+}
+
 // 根据指令查询
 export function getByCommand(command) {
   return request({
