@@ -38,6 +38,7 @@
             @add-child="addTableChild"
             @update-child="updateTableChild"
             @delete-child="deleteTableChild"
+            @table-operation="handleTableOperation"
           />
         </div>
       </div>
@@ -143,7 +144,7 @@ function addComponent(componentType) {
     roleUsers: { type: 'roleUsers', label: '按角色多选用户', field: `field_${nextId.value}`, required: false, placeholder: '请按角色选择用户', defaultValue: [] },
     dept: { type: 'dept', label: '单选部门', field: `field_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: '' },
     depts: { type: 'depts', label: '多选部门', field: `field_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: [] },
-    table: { type: 'table', label: '表格布局', field: `table_${nextId.value}`, rows: 2, cols: 2, children: [], required: false }
+    table: { type: 'table', label: '表格布局', field: `table_${nextId.value}`, rows: 2, cols: 2, children: [], mergeInfo: [], required: false }
   }
   const newComp = { id: nextId.value++, ...configs[componentType] }
   formData.value.push(newComp)
@@ -259,6 +260,181 @@ function deleteTableChild(tableId, childId) {
       selectedComponent.value = null
     }
   }
+}
+
+// 表格操作函数
+function handleTableOperation(tableId, operation, rowIdx, colIdx, cells) {
+  const table = formData.value.find(c => c.id === tableId)
+  if (!table || table.type !== 'table') return
+  
+  if (!table.mergeInfo) {
+    table.mergeInfo = []
+  }
+  
+  switch (operation) {
+    case 'merge':
+      mergeCells(table, cells)
+      break
+    case 'unmerge':
+      unmergeCells(table, rowIdx, colIdx)
+      break
+    case 'insertRowBefore':
+      insertRow(table, rowIdx, 'before')
+      break
+    case 'insertRowAfter':
+      insertRow(table, rowIdx, 'after')
+      break
+    case 'insertColBefore':
+      insertCol(table, colIdx, 'before')
+      break
+    case 'insertColAfter':
+      insertCol(table, colIdx, 'after')
+      break
+    case 'deleteRow':
+      deleteRow(table, rowIdx)
+      break
+    case 'deleteCol':
+      deleteCol(table, colIdx)
+      break
+  }
+}
+
+// 合并单元格（基于选中的单元格范围）
+function mergeCells(table, cells) {
+  if (!cells || cells.length < 2) return
+  
+  const rows = cells.map(c => c.row)
+  const cols = cells.map(c => c.col)
+  const minRow = Math.min(...rows)
+  const maxRow = Math.max(...rows)
+  const minCol = Math.min(...cols)
+  const maxCol = Math.max(...cols)
+  
+  const rowspan = maxRow - minRow + 1
+  const colspan = maxCol - minCol + 1
+  
+  // 删除与该合并范围重叠的现有合并
+  table.mergeInfo = table.mergeInfo.filter(m => 
+    !(m.row >= minRow && m.row < minRow + rowspan &&
+      m.col >= minCol && m.col < minCol + colspan)
+  )
+  
+  // 添加新的合并信息
+  table.mergeInfo.push({
+    row: minRow,
+    col: minCol,
+    rowspan,
+    colspan
+  })
+}
+
+// 撤销合并
+function unmergeCells(table, rowIdx, colIdx) {
+  table.mergeInfo = table.mergeInfo.filter(m => 
+    !(m.row === rowIdx && m.col === colIdx)
+  )
+}
+
+// 插入行
+function insertRow(table, rowIdx, position) {
+  const insertAt = position === 'before' ? rowIdx : rowIdx + 1
+  
+  // 更新行数
+  table.rows++
+  
+  // 更新子组件的行索引
+  if (table.children) {
+    table.children.forEach(child => {
+      if (child.rowIdx >= insertAt) {
+        child.rowIdx++
+      }
+    })
+  }
+  
+  // 更新合并信息
+  table.mergeInfo.forEach(m => {
+    if (m.row >= insertAt) {
+      m.row++
+    }
+  })
+}
+
+// 插入列
+function insertCol(table, colIdx, position) {
+  const insertAt = position === 'before' ? colIdx : colIdx + 1
+  
+  // 更新列数
+  table.cols++
+  
+  // 更新子组件的列索引
+  if (table.children) {
+    table.children.forEach(child => {
+      if (child.colIdx >= insertAt) {
+        child.colIdx++
+      }
+    })
+  }
+  
+  // 更新合并信息
+  table.mergeInfo.forEach(m => {
+    if (m.col >= insertAt) {
+      m.col++
+    }
+  })
+}
+
+// 删除行
+function deleteRow(table, rowIdx) {
+  if (table.rows <= 1) return // 至少保留一行
+  
+  table.rows--
+  
+  // 删除该行的子组件
+  if (table.children) {
+    table.children = table.children.filter(child => child.rowIdx !== rowIdx)
+    // 更新后续行的索引
+    table.children.forEach(child => {
+      if (child.rowIdx > rowIdx) {
+        child.rowIdx--
+      }
+    })
+  }
+  
+  // 删除该行的合并信息
+  table.mergeInfo = table.mergeInfo.filter(m => m.row !== rowIdx)
+  // 更新后续合并信息的行索引
+  table.mergeInfo.forEach(m => {
+    if (m.row > rowIdx) {
+      m.row--
+    }
+  })
+}
+
+// 删除列
+function deleteCol(table, colIdx) {
+  if (table.cols <= 1) return // 至少保留一列
+  
+  table.cols--
+  
+  // 删除该列的子组件
+  if (table.children) {
+    table.children = table.children.filter(child => child.colIdx !== colIdx)
+    // 更新后续列的索引
+    table.children.forEach(child => {
+      if (child.colIdx > colIdx) {
+        child.colIdx--
+      }
+    })
+  }
+  
+  // 删除该列的合并信息
+  table.mergeInfo = table.mergeInfo.filter(m => m.col !== colIdx)
+  // 更新后续合并信息的列索引
+  table.mergeInfo.forEach(m => {
+    if (m.col > colIdx) {
+      m.col--
+    }
+  })
 }
 
 function exportJson() {

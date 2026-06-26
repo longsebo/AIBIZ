@@ -128,35 +128,61 @@
               class="design-table" 
               @dragover.stop.prevent 
               @drop.stop="(e) => handleTableDrop(e, comp.id)"
+              @contextmenu.prevent
+              @mouseup="endDragSelect"
             >
               <table>
                 <tbody>
                   <tr v-for="rowIdx in comp.rows" :key="rowIdx">
-                    <td 
-                      v-for="colIdx in comp.cols" 
-                      :key="`${rowIdx}-${colIdx}`"
-                      class="table-cell"
-                      @dragover.stop.prevent
-                      @drop.stop="(e) => handleTableCellDrop(e, comp.id, rowIdx, colIdx)"
-                    >
-                      <div 
-                        v-if="getTableCellChild(comp, rowIdx, colIdx)" 
-                        class="cell-content"
-                        @click.stop="emit('select', getTableCellChild(comp, rowIdx, colIdx))"
+                    <template v-for="colIdx in comp.cols" :key="`${rowIdx}-${colIdx}`">
+                      <td 
+                        v-if="!isHiddenByMerge(comp, rowIdx, colIdx)"
+                        :rowspan="getRowspan(comp, rowIdx, colIdx)"
+                        :colspan="getColspan(comp, rowIdx, colIdx)"
+                        class="table-cell"
+                        :class="{ 'cell-selected': isCellSelected(comp.id, rowIdx, colIdx) }"
+                        @dragover.stop.prevent
+                        @drop.stop="(e) => handleTableCellDrop(e, comp.id, rowIdx, colIdx)"
+                        @contextmenu.prevent="(e) => handleCellContextMenu(e, comp.id, rowIdx, colIdx)"
+                        @click.stop="handleCellClick(comp.id, rowIdx, colIdx, $event)"
                       >
-                        <component-renderer 
-                          :component="getTableCellChild(comp, rowIdx, colIdx)"
-                        />
-                      </div>
-                      <div v-else class="cell-placeholder" @dragover.stop.prevent @drop.stop="(e) => handleTableCellDrop(e, comp.id, rowIdx, colIdx)">
-                        <span>+ 拖入组件</span>
-                      </div>
-                    </td>
+                        <div 
+                          v-if="getTableCellChild(comp, rowIdx, colIdx)" 
+                          class="cell-content"
+                          @click.stop="emit('select', getTableCellChild(comp, rowIdx, colIdx))"
+                        >
+                          <component-renderer 
+                            :component="getTableCellChild(comp, rowIdx, colIdx)"
+                          />
+                        </div>
+                        <div v-else class="cell-placeholder" @dragover.stop.prevent @drop.stop="(e) => handleTableCellDrop(e, comp.id, rowIdx, colIdx)">
+                          <span>+ 拖入组件</span>
+                        </div>
+                      </td>
+                    </template>
                   </tr>
                 </tbody>
               </table>
             </div>
           </el-form-item>
+          
+          <!-- 右键菜单 -->
+          <div 
+            v-if="contextMenu.visible" 
+            class="context-menu"
+            :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+          >
+            <div class="menu-item" :class="{ disabled: !hasMultipleSelection }" @click="handleMenuClick('merge')">合并单元格</div>
+            <div class="menu-item" @click="handleMenuClick('unmerge')">撤销合并</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" @click="handleMenuClick('insertRowBefore')">前插入行</div>
+            <div class="menu-item" @click="handleMenuClick('insertRowAfter')">后插入行</div>
+            <div class="menu-item" @click="handleMenuClick('insertColBefore')">前插入列</div>
+            <div class="menu-item" @click="handleMenuClick('insertColAfter')">后插入列</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item danger" @click="handleMenuClick('deleteRow')">删除行</div>
+            <div class="menu-item danger" @click="handleMenuClick('deleteCol')">删除列</div>
+          </div>
         </div>
         
         <div class="item-actions">
@@ -172,6 +198,7 @@
 </template>
 
 <script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
 import ComponentRenderer from './ComponentRenderer.vue'
 import FormUserSelect from './FormUserSelect.vue'
 import FormRoleUserSelect from './FormRoleUserSelect.vue'
@@ -188,7 +215,136 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['select', 'update', 'delete', 'add-component', 'add-child', 'update-child', 'delete-child'])
+const emit = defineEmits(['select', 'update', 'delete', 'add-component', 'add-child', 'update-child', 'delete-child', 'table-operation'])
+
+// 右键菜单状态
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  tableId: null,
+  rowIdx: null,
+  colIdx: null
+})
+
+// 单元格选中状态
+const selectedCells = ref(new Map())
+
+// 是否有多个单元格被选中
+const hasMultipleSelection = computed(() => {
+  if (!contextMenu.value.tableId) return false
+  const tableCells = selectedCells.value.get(contextMenu.value.tableId) || []
+  return tableCells.length > 1
+})
+
+// 点击其他地方关闭菜单和清空选中
+onMounted(() => {
+  document.addEventListener('click', closeContextMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu)
+})
+
+function closeContextMenu() {
+  contextMenu.value.visible = false
+}
+
+// 单元格选中相关函数
+function isCellSelected(tableId, rowIdx, colIdx) {
+  const tableCells = selectedCells.value.get(tableId) || []
+  return tableCells.some(cell => cell.row === rowIdx && cell.col === colIdx)
+}
+
+function toggleCellSelection(tableId, rowIdx, colIdx) {
+  let tableCells = selectedCells.value.get(tableId) || []
+  const index = tableCells.findIndex(cell => cell.row === rowIdx && cell.col === colIdx)
+  if (index !== -1) {
+    tableCells.splice(index, 1)
+  } else {
+    tableCells.push({ row: rowIdx, col: colIdx })
+  }
+  selectedCells.value.set(tableId, tableCells)
+}
+
+function clearCellSelection(tableId) {
+  selectedCells.value.delete(tableId)
+}
+
+function handleCellClick(tableId, rowIdx, colIdx, event) {
+  const table = props.formData.find(c => c.id === tableId)
+  if (!table) return
+  
+  if (event.ctrlKey || event.metaKey) {
+    toggleCellSelection(tableId, rowIdx, colIdx)
+  } else {
+    clearCellSelection(tableId)
+    toggleCellSelection(tableId, rowIdx, colIdx)
+  }
+}
+
+// 右键菜单处理
+function handleCellContextMenu(e, tableId, rowIdx, colIdx) {
+  e.preventDefault()
+  e.stopPropagation()
+  contextMenu.value = {
+    visible: true,
+    x: e.clientX,
+    y: e.clientY,
+    tableId,
+    rowIdx,
+    colIdx
+  }
+}
+
+function handleMenuClick(operation) {
+  const tableId = contextMenu.value.tableId
+  const rowIdx = contextMenu.value.rowIdx
+  const colIdx = contextMenu.value.colIdx
+  
+  if (operation === 'merge') {
+    const cells = selectedCells.value.get(tableId) || []
+    emit('table-operation', tableId, operation, rowIdx, colIdx, cells)
+  } else {
+    emit('table-operation', tableId, operation, rowIdx, colIdx)
+  }
+  closeContextMenu()
+}
+
+// 合并单元格辅助函数
+function isHiddenByMerge(table, rowIdx, colIdx) {
+  if (!table.mergeInfo) return false
+  for (const merge of table.mergeInfo) {
+    // 如果当前单元格在合并范围内且不是起始单元格，则隐藏
+    if (rowIdx >= merge.row && rowIdx < merge.row + merge.rowspan &&
+        colIdx >= merge.col && colIdx < merge.col + merge.colspan) {
+      if (rowIdx !== merge.row || colIdx !== merge.col) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function getRowspan(table, rowIdx, colIdx) {
+  if (!table.mergeInfo) return 1
+  for (const merge of table.mergeInfo) {
+    if (merge.row === rowIdx && merge.col === colIdx) {
+      return merge.rowspan
+    }
+  }
+  return 1
+}
+
+function getColspan(table, rowIdx, colIdx) {
+  if (!table.mergeInfo) return 1
+  for (const merge of table.mergeInfo) {
+    if (merge.row === rowIdx && merge.col === colIdx) {
+      return merge.colspan
+    }
+  }
+  return 1
+}
 
 function handleDrop(e) {
   e.preventDefault()
@@ -387,5 +543,56 @@ function titleStyle(comp) {
   height: 40px;
   color: #ccc;
   font-size: 12px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  min-width: 120px;
+}
+
+.menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #303133;
+  transition: background 0.2s;
+}
+
+.menu-item:hover {
+  background: #f5f7fa;
+}
+
+.menu-item.danger {
+  color: #f56c6c;
+}
+
+.menu-item.danger:hover {
+  background: #fef0f0;
+}
+
+.menu-item.disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.menu-item.disabled:hover {
+  background: none;
+}
+
+.menu-divider {
+  height: 1px;
+  background: #e6e6e6;
+  margin: 4px 0;
+}
+
+.cell-selected {
+  background: #e8f4ff !important;
+  border-color: #409eff !important;
 }
 </style>
