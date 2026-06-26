@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.flowable.mapper.SysProcessFormMapper">
+
+    <resultMap type="SysProcessForm" id="SysProcessFormResult">
+        <id     property="id"            column="id"              />
+        <result property="processKey"    column="process_key"     />
+        <result property="processName"   column="process_name"    />
+        <result property="formId"        column="form_id"         />
+        <result property="createBy"    column="create_by"       />
+        <result property="createTime"  column="create_time"     />
+        <result property="updateBy"    column="update_by"       />
+        <result property="updateTime"  column="update_time"     />
+    </resultMap>
+
+    <sql id="selectProcessFormVo">
+        select id, process_key, process_name, form_id, create_by, create_time, update_by, update_time
+        from sys_process_form
+    </sql>
+
+    <select id="selectProcessFormList" parameterType="SysProcessForm" resultMap="SysProcessFormResult">
+        <include refid="selectProcessFormVo"/>
+        <where>
+            <if test="processKey != null and processKey != ''">
+                AND process_key like concat('%', #{processKey}, '%')
+            </if>
+            <if test="formId != null">
+                AND form_id = #{formId}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectProcessFormById" parameterType="Long" resultMap="SysProcessFormResult">
+        <include refid="selectProcessFormVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectProcessFormByProcessKey" parameterType="String" resultMap="SysProcessFormResult">
+        <include refid="selectProcessFormVo"/>
+        where process_key = #{processKey}
+    </select>
+
+    <insert id="insertProcessForm" parameterType="SysProcessForm" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_process_form
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="processKey != null and processKey != ''">process_key,</if>
+            <if test="processName != null and processName != ''">process_name,</if>
+            <if test="formId != null">form_id,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="processKey != null and processKey != ''">#{processKey},</if>
+            <if test="processName != null and processName != ''">#{processName},</if>
+            <if test="formId != null">#{formId},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <update id="updateProcessForm" parameterType="SysProcessForm">
+        update sys_process_form
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="processKey != null and processKey != ''">process_key = #{processKey},</if>
+            <if test="processName != null and processName != ''">process_name = #{processName},</if>
+            <if test="formId != null">form_id = #{formId},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteProcessFormById" parameterType="Long">
+        delete from sys_process_form where id = #{id}
+    </delete>
+
+    <delete id="deleteProcessFormByIds" parameterType="Long">
+        delete from sys_process_form where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

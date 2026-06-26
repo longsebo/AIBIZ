@@ -39,6 +39,16 @@ VALUES('任务委派', @taskId, 4, '#', '', 1, 0, 'F', '0', '0', 'flowable:task:
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
 VALUES('任务认领', @taskId, 5, '#', '', 1, 0, 'F', '0', '0', 'flowable:task:claim', '#', 'admin', NOW(), '');
 
+-- 表单设计器
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('表单设计器', @parentId, 3, 'form', 'flowable/form/FormDesigner', 1, 0, 'C', '0', '0', 'flowable:form:list', 'edit', 'admin', NOW(), '表单设计器菜单');
+
+SET @formId = LAST_INSERT_ID();
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('设计表单', @formId, 1, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:design', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('导出表单', @formId, 2, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:export', '#', 'admin', NOW(), '');
+
 -- AI指令映射 - Flowable相关指令
 INSERT INTO ai_command_map (command, command_type, menu_path, menu_name, sort, status, remark) VALUES
 ('流程列表', 'list', 'flowable/process/index', '流程定义', 100, '0', '查询流程定义列表'),
@@ -48,4 +58,6 @@ INSERT INTO ai_command_map (command, command_type, menu_path, menu_name, sort, s
 ('待办任务', 'list', 'flowable/task/index', '我的任务', 104, '0', '查询我的待办任务'),
 ('我的已办', 'list', 'flowable/task/index', '我的任务', 105, '0', '查询我的已办任务'),
 ('已办任务', 'list', 'flowable/task/index', '我的任务', 106, '0', '查询我的已办任务'),
-('请假流程', 'start', 'flowable/process/index', '流程定义', 107, '0', '启动请假流程');
+('请假流程', 'start', 'flowable/process/index', '流程定义', 107, '0', '启动请假流程'),
+('表单设计', 'list', 'flowable/form/FormDesigner', '表单设计器', 108, '0', '打开表单设计器'),
+('设计表单', 'list', 'flowable/form/FormDesigner', '表单设计器', 109, '0', '打开表单设计器');
