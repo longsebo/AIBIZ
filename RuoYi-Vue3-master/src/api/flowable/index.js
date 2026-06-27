@@ -117,3 +117,11 @@ export function updateProcess(data) {
     data: data
   })
 }
+
+// 根据流程Key获取流程XML
+export function getProcessXmlByKey(processDefinitionKey) {
+  return request({
+    url: '/flowable/process/xml/' + processDefinitionKey,
+    method: 'get'
+  })
+}

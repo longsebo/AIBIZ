@@ -113,6 +113,13 @@ public interface ProcessService {
     String getProcessDiagram(String processDefinitionId);
 
     /**
+     * 根据流程Key获取流程图XML
+     *
+     * @param processDefinitionKey 流程定义Key
+     */
+    String getProcessXmlByKey(String processDefinitionKey);
+
+    /**
      * 更新并重新部署流程
      *
      * @param processDefinitionKey 流程定义Key

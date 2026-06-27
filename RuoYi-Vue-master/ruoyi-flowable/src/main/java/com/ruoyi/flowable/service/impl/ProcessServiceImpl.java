@@ -236,6 +236,29 @@ public class ProcessServiceImpl implements ProcessService {
         }
     }
 
+    @Override
+    public String getProcessXmlByKey(String processDefinitionKey) {
+        org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                .createProcessDefinitionQuery()
+                .processDefinitionKey(processDefinitionKey)
+                .latestVersion()
+                .singleResult();
+        if (pd == null) {
+            return null;
+        }
+        InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+        if (is == null) {
+            return null;
+        }
+        try {
+            byte[] bytes = is.readAllBytes();
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.error("读取流程XML失败", e);
+            return null;
+        }
+    }
+
     private ProcessInstance convertProcessInstance(org.flowable.engine.runtime.ProcessInstance pi) {
         ProcessInstance result = new ProcessInstance();
         result.setId(pi.getId());

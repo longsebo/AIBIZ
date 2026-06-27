@@ -168,6 +168,18 @@ public class ProcessController extends BaseController {
     }
 
     /**
+     * 根据流程Key获取流程XML
+     */
+    @PreAuthorize("@ss.hasPermi('flowable:process:design')")
+    @GetMapping("/xml/{processDefinitionKey}")
+    public AjaxResult getXmlByKey(@PathVariable String processDefinitionKey) {
+        String xml = processService.getProcessXmlByKey(processDefinitionKey);
+        Map<String, Object> data = new HashMap<>();
+        data.put("xml", xml);
+        return success(data);
+    }
+
+    /**
      * 更新并重新部署流程
      */
     @PreAuthorize("@ss.hasPermi('flowable:process:design')")
