@@ -111,4 +111,14 @@ public interface ProcessService {
      * @param processDefinitionId 流程定义ID
      */
     String getProcessDiagram(String processDefinitionId);
+
+    /**
+     * 更新并重新部署流程
+     *
+     * @param processDefinitionKey 流程定义Key
+     * @param name 流程名称
+     * @param category 流程分类
+     * @param bpmnXml BPMN XML内容
+     */
+    void updateAndDeployProcess(String processDefinitionKey, String name, String category, String bpmnXml);
 }

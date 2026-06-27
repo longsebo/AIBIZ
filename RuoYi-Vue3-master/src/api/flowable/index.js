@@ -108,3 +108,12 @@ export function getProcessDiagram(processDefinitionId) {
     method: 'get'
   })
 }
+
+// 更新并重新部署流程
+export function updateProcess(data) {
+  return request({
+    url: '/flowable/process/update',
+    method: 'post',
+    data: data
+  })
+}

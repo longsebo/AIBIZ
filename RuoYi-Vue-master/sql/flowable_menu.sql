@@ -22,6 +22,24 @@ INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame
 VALUES('启动流程', @processId, 3, '#', '', 1, 0, 'F', '0', '0', 'flowable:process:start', '#', 'admin', NOW(), '');
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
 VALUES('流程删除', @processId, 4, '#', '', 1, 0, 'F', '0', '0', 'flowable:process:remove', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程设计', @processId, 5, '#', '', 1, 0, 'F', '0', '0', 'flowable:process:design', '#', 'admin', NOW(), '');
+
+-- 流程分类
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程分类', @parentId, 1, 'category', 'flowable/category/index', 1, 0, 'C', '0', '0', 'flowable:category:list', 'tree', 'admin', NOW(), '流程分类菜单');
+
+SET @categoryId = LAST_INSERT_ID();
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程分类查询', @categoryId, 1, '#', '', 1, 0, 'F', '0', '0', 'flowable:category:query', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程分类新增', @categoryId, 2, '#', '', 1, 0, 'F', '0', '0', 'flowable:category:add', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程分类修改', @categoryId, 3, '#', '', 1, 0, 'F', '0', '0', 'flowable:category:edit', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程分类删除', @categoryId, 4, '#', '', 1, 0, 'F', '0', '0', 'flowable:category:remove', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('流程分类导出', @categoryId, 5, '#', '', 1, 0, 'F', '0', '0', 'flowable:category:export', '#', 'admin', NOW(), '');
 
 -- 我的任务
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
@@ -60,4 +78,6 @@ INSERT INTO ai_command_map (command, command_type, menu_path, menu_name, sort, s
 ('已办任务', 'list', 'flowable/task/index', '我的任务', 106, '0', '查询我的已办任务'),
 ('请假流程', 'start', 'flowable/process/index', '流程定义', 107, '0', '启动请假流程'),
 ('表单设计', 'list', 'flowable/form/FormDesigner', '表单设计器', 108, '0', '打开表单设计器'),
-('设计表单', 'list', 'flowable/form/FormDesigner', '表单设计器', 109, '0', '打开表单设计器');
+('设计表单', 'list', 'flowable/form/FormDesigner', '表单设计器', 109, '0', '打开表单设计器'),
+('流程分类', 'list', 'flowable/category/index', '流程分类', 110, '0', '查询流程分类列表'),
+('分类管理', 'list', 'flowable/category/index', '流程分类', 111, '0', '打开流程分类管理');

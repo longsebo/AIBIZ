@@ -275,4 +275,33 @@ public class ProcessServiceImpl implements ProcessService {
         }
         return info;
     }
+
+    @Override
+    public void updateAndDeployProcess(String processDefinitionKey, String name, String category, String bpmnXml) {
+        // 先查询已有流程定义
+        org.flowable.engine.repository.ProcessDefinition existingDef = repositoryService
+                .createProcessDefinitionQuery()
+                .processDefinitionKey(processDefinitionKey)
+                .latestVersion()
+                .singleResult();
+
+        if (existingDef != null) {
+            // 如果已存在，先删除旧版本
+            List<org.flowable.engine.repository.ProcessDefinition> versions = repositoryService
+                    .createProcessDefinitionQuery()
+                    .processDefinitionKey(processDefinitionKey)
+                    .list();
+            for (org.flowable.engine.repository.ProcessDefinition pd : versions) {
+                repositoryService.deleteDeployment(pd.getDeploymentId(), true);
+            }
+        }
+
+        // 部署新版本
+        repositoryService.createDeployment()
+                .name(name)
+                .key(processDefinitionKey)
+                .category(category)
+                .addString(name + ".bpmn20.xml", bpmnXml)
+                .deploy();
+    }
 }

@@ -166,4 +166,18 @@ public class ProcessController extends BaseController {
         data.put("xml", xml);
         return success(data);
     }
+
+    /**
+     * 更新并重新部署流程
+     */
+    @PreAuthorize("@ss.hasPermi('flowable:process:design')")
+    @PostMapping("/update")
+    public AjaxResult updateProcess(@RequestBody Map<String, String> params) {
+        String key = params.get("key");
+        String name = params.get("name");
+        String category = params.get("category");
+        String bpmnXml = params.get("bpmnXml");
+        processService.updateAndDeployProcess(key, name, category, bpmnXml);
+        return success();
+    }
 }

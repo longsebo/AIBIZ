@@ -158,6 +158,21 @@ export const dynamicRoutes = [
         meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
       }
     ]
+  },
+  // 流程设计器
+  {
+    path: '/flowable/process-designer',
+    component: Layout,
+    hidden: true,
+    permissions: ['flowable:process:design'],
+    children: [
+      {
+        path: ':key',
+        component: () => import('@/views/flowable/process/ProcessDesigner'),
+        name: 'ProcessDesigner',
+        meta: { title: '流程设计', activeMenu: '/flowable/process' }
+      }
+    ]
   }
 ]
 
