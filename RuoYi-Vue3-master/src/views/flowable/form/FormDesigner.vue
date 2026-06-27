@@ -83,12 +83,13 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, getCurrentInstance } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FormCanvas from './FormCanvas.vue'
 import PropertyPanel from './PropertyPanel.vue'
 import FormPreview from './FormPreview.vue'
-import { saveForm as saveFormApi } from '@/api/flowable/form'
+import { saveForm as saveFormApi, getForm, updateForm } from '@/api/flowable/form'
 import {
   EditPen,
   Edit,
@@ -143,14 +144,14 @@ function getIcon(name) {
   return iconMap[name] || EditPen
 }
 
-const formData = ref([
-  { id: 1, type: 'title', label: '表单标题', fontStyle: 'bold', fontFamily: '', fontSize: 18, align: 'left', required: false, placeholder: '', defaultValue: '' },
-  { id: 2, type: 'input', label: '姓名', field: 'name', required: true, placeholder: '请输入姓名', defaultValue: '' },
-  { id: 3, type: 'input', label: '手机号', field: 'phone', required: true, placeholder: '请输入手机号', defaultValue: '' }
-])
+const { proxy } = getCurrentInstance()
+const route = useRoute()
+const router = useRouter()
 
+const formId = ref(null)
+const formData = ref([])
 const selectedComponent = ref(null)
-const nextId = ref(4)
+const nextId = ref(1)
 
 // 预览和保存相关数据
 const previewVisible = ref(false)
@@ -160,16 +161,45 @@ const saveFormData = ref({
   formDesc: ''
 })
 
+onMounted(() => {
+  if (route.params.id) {
+    formId.value = route.params.id
+    loadFormData(route.params.id)
+  }
+})
+
+async function loadFormData(id) {
+  try {
+    const res = await getForm(id)
+    if (res.data) {
+      saveFormData.value.formName = res.data.formName || ''
+      saveFormData.value.formDesc = res.data.formDesc || ''
+      if (res.data.formJson) {
+        const parsed = JSON.parse(res.data.formJson)
+        formData.value = parsed
+        let maxId = 0
+        parsed.forEach(comp => {
+          if (comp.id > maxId) maxId = comp.id
+          if (comp.children && comp.children.length > 0) {
+            comp.children.forEach(child => {
+              if (child.id > maxId) maxId = child.id
+            })
+          }
+        })
+        nextId.value = maxId + 1
+      }
+    }
+  } catch (e) {
+    ElMessage.error('加载表单数据失败')
+  }
+}
+
 function handlePreview() {
   previewVisible.value = true
 }
 
 function handleSave() {
   saveVisible.value = true
-  saveFormData.value = {
-    formName: '',
-    formDesc: ''
-  }
 }
 
 async function submitSave() {
@@ -181,13 +211,23 @@ async function submitSave() {
   const formJson = JSON.stringify(formData.value)
   
   try {
-    await saveFormApi({
-      formName: saveFormData.value.formName,
-      formDesc: saveFormData.value.formDesc,
-      formJson: formJson
-    })
+    if (formId.value) {
+      await updateForm({
+        id: formId.value,
+        formName: saveFormData.value.formName,
+        formDesc: saveFormData.value.formDesc,
+        formJson: formJson
+      })
+    } else {
+      await saveFormApi({
+        formName: saveFormData.value.formName,
+        formDesc: saveFormData.value.formDesc,
+        formJson: formJson
+      })
+    }
     ElMessage.success('保存成功')
     saveVisible.value = false
+    router.back()
   } catch (error) {
     ElMessage.error('保存失败：' + (error.message || '未知错误'))
   }

@@ -57,15 +57,21 @@ VALUES('任务委派', @taskId, 4, '#', '', 1, 0, 'F', '0', '0', 'flowable:task:
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
 VALUES('任务认领', @taskId, 5, '#', '', 1, 0, 'F', '0', '0', 'flowable:task:claim', '#', 'admin', NOW(), '');
 
--- 表单设计器
+-- 表单管理
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
-VALUES('表单设计器', @parentId, 3, 'form', 'flowable/form/FormDesigner', 1, 0, 'C', '0', '0', 'flowable:form:list', 'edit', 'admin', NOW(), '表单设计器菜单');
+VALUES('表单管理', @parentId, 3, 'form', 'flowable/form/index', 1, 0, 'C', '0', '0', 'flowable:form:list', 'edit', 'admin', NOW(), '表单管理菜单');
 
 SET @formId = LAST_INSERT_ID();
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
-VALUES('设计表单', @formId, 1, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:design', '#', 'admin', NOW(), '');
+VALUES('表单查询', @formId, 1, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:query', '#', 'admin', NOW(), '');
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
-VALUES('导出表单', @formId, 2, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:export', '#', 'admin', NOW(), '');
+VALUES('表单新增', @formId, 2, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:add', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('表单修改', @formId, 3, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:edit', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('表单删除', @formId, 4, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:remove', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('表单导出', @formId, 5, '#', '', 1, 0, 'F', '0', '0', 'flowable:form:export', '#', 'admin', NOW(), '');
 
 -- AI指令映射 - Flowable相关指令
 INSERT INTO ai_command_map (command, command_type, menu_path, menu_name, sort, status, remark) VALUES
@@ -77,7 +83,9 @@ INSERT INTO ai_command_map (command, command_type, menu_path, menu_name, sort, s
 ('我的已办', 'list', 'flowable/task/index', '我的任务', 105, '0', '查询我的已办任务'),
 ('已办任务', 'list', 'flowable/task/index', '我的任务', 106, '0', '查询我的已办任务'),
 ('请假流程', 'start', 'flowable/process/index', '流程定义', 107, '0', '启动请假流程'),
-('表单设计', 'list', 'flowable/form/FormDesigner', '表单设计器', 108, '0', '打开表单设计器'),
-('设计表单', 'list', 'flowable/form/FormDesigner', '表单设计器', 109, '0', '打开表单设计器'),
-('流程分类', 'list', 'flowable/category/index', '流程分类', 110, '0', '查询流程分类列表'),
-('分类管理', 'list', 'flowable/category/index', '流程分类', 111, '0', '打开流程分类管理');
+('表单设计', 'list', 'flowable/form/index', '表单管理', 108, '0', '打开表单管理页面'),
+('设计表单', 'list', 'flowable/form/index', '表单管理', 109, '0', '打开表单管理页面'),
+('表单列表', 'list', 'flowable/form/index', '表单管理', 110, '0', '查询表单列表'),
+('表单管理', 'list', 'flowable/form/index', '表单管理', 111, '0', '打开表单管理页面'),
+('流程分类', 'list', 'flowable/category/index', '流程分类', 112, '0', '查询流程分类列表'),
+('分类管理', 'list', 'flowable/category/index', '流程分类', 113, '0', '打开流程分类管理');

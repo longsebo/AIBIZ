@@ -173,6 +173,27 @@ export const dynamicRoutes = [
         meta: { title: '流程设计', activeMenu: '/flowable/process' }
       }
     ]
+  },
+  // 表单设计器
+  {
+    path: '/flowable/form-design',
+    component: Layout,
+    hidden: true,
+    permissions: ['flowable:form:add'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/flowable/form/FormDesigner'),
+        name: 'FormDesignerAdd',
+        meta: { title: '新增表单', activeMenu: '/flowable/form' }
+      },
+      {
+        path: ':id(\\d+)',
+        component: () => import('@/views/flowable/form/FormDesigner'),
+        name: 'FormDesignerEdit',
+        meta: { title: '编辑表单', activeMenu: '/flowable/form' }
+      }
+    ]
   }
 ]
 

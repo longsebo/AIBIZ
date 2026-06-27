@@ -39,9 +39,10 @@
                <el-tag v-else type="success">激活</el-tag>
             </template>
          </el-table-column>
-         <el-table-column label="操作" align="center" width="280" class-name="small-padding fixed-width">
+         <el-table-column label="操作" align="center" width="360" class-name="small-padding fixed-width">
             <template #default="scope">
                <el-button link type="primary" icon="Edit" @click="handleDesign(scope.row)" v-hasPermi="['flowable:process:design']">流程设计</el-button>
+               <el-button link type="primary" icon="Document" @click="handleBindForm(scope.row)" v-hasPermi="['flowable:processForm:add']">绑定表单</el-button>
                <el-button link type="primary" icon="VideoPlay" @click="handleStart(scope.row)" v-hasPermi="['flowable:process:start']">启动</el-button>
                <el-button link type="primary" icon="Picture" @click="handleDiagram(scope.row)" v-hasPermi="['flowable:process:query']">流程图</el-button>
                <el-button link type="danger" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['flowable:process:remove']">删除</el-button>
@@ -97,6 +98,29 @@
       <el-dialog v-model="diagramOpen" title="流程图" width="80%" top="5vh" append-to-body>
          <div v-html="diagramXml" class="diagram-container"></div>
       </el-dialog>
+
+      <!-- 绑定表单对话框 -->
+      <el-dialog :title="'绑定表单 - ' + bindForm.processName" v-model="bindOpen" width="500px" append-to-body>
+         <el-form ref="bindRef" :model="bindForm" :rules="bindRules" label-width="100px">
+            <el-form-item label="流程名称" prop="processName">
+               <el-input v-model="bindForm.processName" disabled />
+            </el-form-item>
+            <el-form-item label="流程Key" prop="processKey">
+               <el-input v-model="bindForm.processKey" disabled />
+            </el-form-item>
+            <el-form-item label="绑定表单" prop="formId">
+               <el-select v-model="bindForm.formId" placeholder="请选择表单" style="width: 100%">
+                  <el-option v-for="item in formList" :key="item.id" :label="item.formName" :value="item.id" />
+               </el-select>
+            </el-form-item>
+         </el-form>
+         <template #footer>
+            <div class="dialog-footer">
+               <el-button type="primary" @click="submitBind">确 定</el-button>
+               <el-button @click="cancelBind">取 消</el-button>
+            </div>
+         </template>
+      </el-dialog>
    </div>
 </template>
 
@@ -112,6 +136,8 @@ import {
    getProcessDiagram
 } from '@/api/flowable'
 import { listCategoryAll } from '@/api/flowable/category'
+import { listForm } from '@/api/flowable/form'
+import { bindProcessForm, updateProcessForm, getProcessFormByKey } from '@/api/flowable/processForm'
 
 const { proxy } = getCurrentInstance()
 const router = useRouter()
@@ -125,9 +151,12 @@ const queryParams = reactive({ name: '', category: '' })
 const addOpen = ref(false)
 const startOpen = ref(false)
 const diagramOpen = ref(false)
+const bindOpen = ref(false)
 const diagramXml = ref('')
+const formList = ref([])
 const addForm = reactive({ name: '', category: '', key: '' })
 const startForm = reactive({ key: '', name: '', businessKey: '', applicant: '', reason: '' })
+const bindForm = reactive({ id: '', processKey: '', processName: '', formId: '' })
 
 const addRules = {
    name: [{ required: true, message: '请输入流程名称', trigger: 'blur' }],
@@ -136,11 +165,24 @@ const addRules = {
 const startRules = {
    businessKey: [{ required: true, message: '请输入业务键', trigger: 'blur' }]
 }
+const bindRules = {
+   formId: [{ required: true, message: '请选择表单', trigger: 'change' }]
+}
 
 onMounted(() => {
    getList()
    getCategoryList()
+   getFormList()
 })
+
+async function getFormList() {
+   try {
+      const res = await listForm({})
+      formList.value = res.rows || res.data || []
+   } catch (e) {
+      console.error('加载表单列表失败', e)
+   }
+}
 
 async function getList() {
    loading.value = true
@@ -189,15 +231,20 @@ function generateDefaultBpmn(processName, processKey) {
    return `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xmlns:flowable="http://flowable.org/bpmn"
    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-   xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-   xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+   id="Definitions_${processKey}"
    targetNamespace="http://flowable.org/bpmn20">
-   <process id="${processKey}" name="${processName}">
+   <process id="${processKey}" name="${processName}" isExecutable="true">
       <startEvent id="startEvent1" name="开始">
          <outgoing>flow1</outgoing>
       </startEvent>
-      <userTask id="userTask1" name="审批节点" assignee="\${initiator}">
+      <userTask id="userTask1" name="审批节点">
+         <extensionElements>
+            <flowable:assignee>${'${}'}initiator</flowable:assignee>
+         </extensionElements>
          <incoming>flow1</incoming>
          <outgoing>flow2</outgoing>
       </userTask>
@@ -207,24 +254,24 @@ function generateDefaultBpmn(processName, processKey) {
       <sequenceFlow id="flow1" sourceRef="startEvent1" targetRef="userTask1" />
       <sequenceFlow id="flow2" sourceRef="userTask1" targetRef="endEvent1" />
    </process>
-   <bpmndi:BPMNDiagram id="BPMNDiagram1">
-      <bpmndi:BPMNPlane bpmnElement="${processKey}">
-         <bpmndi:BPMNShape bpmnElement="startEvent1">
-            <omgdc:Bounds x="100" y="100" width="30" height="30" />
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+      <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${processKey}">
+         <bpmndi:BPMNShape id="_BPMNShape_startEvent1" bpmnElement="startEvent1">
+            <dc:Bounds x="100" y="100" width="30" height="30" />
          </bpmndi:BPMNShape>
-         <bpmndi:BPMNShape bpmnElement="userTask1">
-            <omgdc:Bounds x="180" y="80" width="100" height="60" />
+         <bpmndi:BPMNShape id="_BPMNShape_userTask1" bpmnElement="userTask1">
+            <dc:Bounds x="180" y="80" width="100" height="60" />
          </bpmndi:BPMNShape>
-         <bpmndi:BPMNShape bpmnElement="endEvent1">
-            <omgdc:Bounds x="330" y="100" width="30" height="30" />
+         <bpmndi:BPMNShape id="_BPMNShape_endEvent1" bpmnElement="endEvent1">
+            <dc:Bounds x="330" y="100" width="30" height="30" />
          </bpmndi:BPMNShape>
-         <bpmndi:BPMNEdge bpmnElement="flow1">
-            <omgdi:waypoint x="130" y="115" />
-            <omgdi:waypoint x="180" y="110" />
+         <bpmndi:BPMNEdge id="_BPMNEdge_flow1" bpmnElement="flow1">
+            <di:waypoint x="130" y="115" />
+            <di:waypoint x="180" y="110" />
          </bpmndi:BPMNEdge>
-         <bpmndi:BPMNEdge bpmnElement="flow2">
-            <omgdi:waypoint x="280" y="110" />
-            <omgdi:waypoint x="330" y="115" />
+         <bpmndi:BPMNEdge id="_BPMNEdge_flow2" bpmnElement="flow2">
+            <di:waypoint x="280" y="110" />
+            <di:waypoint x="330" y="115" />
          </bpmndi:BPMNEdge>
       </bpmndi:BPMNPlane>
    </bpmndi:BPMNDiagram>
@@ -234,7 +281,7 @@ function generateDefaultBpmn(processName, processKey) {
 function handleAdd() {
    addForm.name = ''
    addForm.category = ''
-   addForm.key = ''
+   addForm.key = 'process_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
    addOpen.value = true
 }
 
@@ -316,6 +363,46 @@ async function handleDelete(row) {
    } catch (error) {
       // 用户取消
    }
+}
+
+async function handleBindForm(row) {
+   bindForm.id = ''
+   bindForm.processKey = row.key
+   bindForm.processName = row.name
+   bindForm.formId = ''
+   
+   try {
+      const res = await getProcessFormByKey(row.key)
+      if (res.data) {
+         bindForm.id = res.data.id
+         bindForm.formId = res.data.formId
+      }
+   } catch (e) {
+      // 未绑定表单
+   }
+   bindOpen.value = true
+}
+
+async function submitBind() {
+   proxy.$refs["bindRef"].validate(async valid => {
+      if (valid) {
+         try {
+            if (bindForm.id) {
+               await updateProcessForm(bindForm)
+            } else {
+               await bindProcessForm(bindForm)
+            }
+            proxy.$modal.msgSuccess('绑定成功')
+            bindOpen.value = false
+         } catch (error) {
+            proxy.$modal.msgError('绑定失败')
+         }
+      }
+   })
+}
+
+function cancelBind() {
+   bindOpen.value = false
 }
 </script>
 
