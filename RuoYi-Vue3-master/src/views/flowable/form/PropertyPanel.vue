@@ -78,6 +78,47 @@
         <el-input-number v-model="localCols" :min="1" :max="10" @change="updateProp('cols', localCols)" />
       </el-form-item>
       
+      <!-- dataTable 表格组件配置 -->
+      <el-form-item label="显示边框" v-if="component.type === 'dataTable'">
+        <el-switch v-model="localBorder" @change="updateProp('border', localBorder)" />
+      </el-form-item>
+      
+      <el-form-item label="斑马纹" v-if="component.type === 'dataTable'">
+        <el-switch v-model="localStripe" @change="updateProp('stripe', localStripe)" />
+      </el-form-item>
+      
+      <el-form-item label="表格尺寸" v-if="component.type === 'dataTable'">
+        <el-select v-model="localSize" @change="updateProp('size', localSize)">
+          <el-option label="大型" value="large" />
+          <el-option label="默认" value="default" />
+          <el-option label="小型" value="small" />
+        </el-select>
+      </el-form-item>
+      
+      <el-form-item label="表格高度" v-if="component.type === 'dataTable'">
+        <el-input v-model="localHeight" placeholder="如: 300 或 auto" @input="updateProp('height', localHeight)" />
+      </el-form-item>
+      
+      <el-form-item label="允许编辑" v-if="component.type === 'dataTable'">
+        <el-switch v-model="localEditable" @change="updateProp('editable', localEditable)" />
+      </el-form-item>
+      
+      <el-form-item label="显示操作列" v-if="component.type === 'dataTable'">
+        <el-switch v-model="localShowActions" @change="updateProp('showActions', localShowActions)" />
+      </el-form-item>
+      
+      <el-form-item label="列配置" v-if="component.type === 'dataTable'">
+        <div class="columns-editor">
+          <div v-for="(col, idx) in localColumns" :key="idx" class="column-item">
+            <el-input v-model="col.prop" placeholder="字段名" style="width: 100px" @input="updateColumns" />
+            <el-input v-model="col.label" placeholder="列标题" style="width: 100px" @input="updateColumns" />
+            <el-input v-model="col.width" placeholder="宽度" style="width: 80px" @input="updateColumns" />
+            <el-button size="small" type="danger" @click="removeColumn(idx)">删除</el-button>
+          </div>
+          <el-button size="small" type="primary" @click="addColumn">添加列</el-button>
+        </div>
+      </el-form-item>
+      
       <el-form-item>
         <el-button type="danger" @click="emit('delete')">删除组件</el-button>
       </el-form-item>
@@ -110,6 +151,15 @@ const localAlign = ref(props.component.align || 'left')
 const localRows = ref(props.component.rows || 2)
 const localCols = ref(props.component.cols || 2)
 
+// dataTable 相关变量
+const localBorder = ref(props.component.border !== false)
+const localStripe = ref(props.component.stripe || false)
+const localSize = ref(props.component.size || 'default')
+const localHeight = ref(props.component.height || '')
+const localEditable = ref(props.component.editable !== false)
+const localShowActions = ref(props.component.showActions !== false)
+const localColumns = ref(props.component.columns ? [...props.component.columns] : [])
+
 const componentTypeLabel = computed(() => {
   const labels = {
     input: '单行输入框',
@@ -123,7 +173,8 @@ const componentTypeLabel = computed(() => {
     users: '多选用户',
     dept: '单选部门',
     depts: '多选部门',
-    table: '表格布局'
+    table: '表格布局',
+    dataTable: '表格组件'
   }
   return labels[props.component.type] || props.component.type
 })
@@ -161,6 +212,14 @@ watch(() => props.component, (newVal) => {
   localAlign.value = newVal.align || 'left'
   localRows.value = newVal.rows || 2
   localCols.value = newVal.cols || 2
+  // dataTable 相关
+  localBorder.value = newVal.border !== false
+  localStripe.value = newVal.stripe || false
+  localSize.value = newVal.size || 'default'
+  localHeight.value = newVal.height || ''
+  localEditable.value = newVal.editable !== false
+  localShowActions.value = newVal.showActions !== false
+  localColumns.value = newVal.columns ? [...newVal.columns] : []
 }, { immediate: true, deep: true })
 
 function updateProp(key, value) {
@@ -175,6 +234,26 @@ function addOption() {
 function removeOption(idx) {
   localOptions.value.splice(idx, 1)
   updateProp('options', localOptions.value)
+}
+
+// dataTable 列配置相关函数
+function updateColumns() {
+  updateProp('columns', localColumns.value)
+}
+
+function addColumn() {
+  const newIdx = localColumns.value.length + 1
+  localColumns.value.push({
+    prop: `col${newIdx}`,
+    label: `列${newIdx}`,
+    width: 150
+  })
+  updateColumns()
+}
+
+function removeColumn(idx) {
+  localColumns.value.splice(idx, 1)
+  updateColumns()
 }
 </script>
 
@@ -197,5 +276,17 @@ function removeOption(idx) {
 
 .option-item .el-input {
   flex: 1;
+}
+
+.columns-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.column-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 </style>

@@ -102,6 +102,19 @@
       </el-form-item>
     </div>
     
+    <div v-else-if="component.type === 'dataTable'" class="cell-form-item datatable-cell">
+      <FormDataTable 
+        :columns="component.columns"
+        v-model:data="component.data"
+        :border="component.border"
+        :stripe="component.stripe"
+        :size="component.size || 'small'"
+        :height="component.height"
+        :editable="component.editable"
+        :show-actions="component.showActions"
+      />
+    </div>
+    
     <div v-else-if="component.type === 'title'" class="render-title" :class="`align-${component.align || 'left'}`">
       <span 
         class="title-text" 
@@ -118,7 +131,9 @@
 
 <script setup>
 import FormUserSelect from './FormUserSelect.vue'
+import FormRoleUserSelect from './FormRoleUserSelect.vue'
 import FormDeptSelect from './FormDeptSelect.vue'
+import FormDataTable from './FormDataTable.vue'
 
 const props = defineProps({
   component: {
@@ -203,5 +218,9 @@ function titleStyle(comp) {
   padding: 4px 0;
   color: #909399;
   font-size: 12px;
+}
+
+.datatable-cell {
+  width: 100%;
 }
 </style>

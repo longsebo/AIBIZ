@@ -91,7 +91,8 @@ const componentLibrary = ref([
   { type: 'roleUsers', label: '按角色多选用户', icon: 'role-users' },
   { type: 'dept', label: '单选部门', icon: 'building' },
   { type: 'depts', label: '多选部门', icon: 'buildings' },
-  { type: 'table', label: '表格布局', icon: 'grid' }
+  { type: 'table', label: '表格布局', icon: 'grid' },
+  { type: 'dataTable', label: '表格组件', icon: 'table' }
 ])
 
 const iconMap = {
@@ -108,7 +109,8 @@ const iconMap = {
   'role-users': UserFilled,
   building: OfficeBuilding,
   buildings: OfficeBuilding,
-  grid: Grid
+  grid: Grid,
+  table: Grid
 }
 
 function getIcon(name) {
@@ -144,7 +146,12 @@ function addComponent(componentType) {
     roleUsers: { type: 'roleUsers', label: '按角色多选用户', field: `field_${nextId.value}`, required: false, placeholder: '请按角色选择用户', defaultValue: [] },
     dept: { type: 'dept', label: '单选部门', field: `field_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: '' },
     depts: { type: 'depts', label: '多选部门', field: `field_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: [] },
-    table: { type: 'table', label: '表格布局', field: `table_${nextId.value}`, rows: 2, cols: 2, children: [], mergeInfo: [], required: false }
+    table: { type: 'table', label: '表格布局', field: `table_${nextId.value}`, rows: 2, cols: 2, children: [], mergeInfo: [], required: false },
+    dataTable: { type: 'dataTable', label: '表格组件', field: `dataTable_${nextId.value}`, columns: [
+      { prop: 'col1', label: '列1', width: 150 },
+      { prop: 'col2', label: '列2', width: 150 },
+      { prop: 'col3', label: '列3', width: 150 }
+    ], data: [], required: false }
   }
   const newComp = { id: nextId.value++, ...configs[componentType] }
   formData.value.push(newComp)
@@ -223,8 +230,14 @@ function addTableChild(tableId, componentType, rowIdx, colIdx) {
       date: { type: 'date', label: '日期', field: `cell_${nextId.value}`, required: false, placeholder: '请选择日期', defaultValue: '' },
       user: { type: 'user', label: '单选用户', field: `cell_${nextId.value}`, required: false, placeholder: '请选择用户', defaultValue: '' },
       users: { type: 'users', label: '多选用户', field: `cell_${nextId.value}`, required: false, placeholder: '请选择用户', defaultValue: [] },
+      roleUser: { type: 'roleUser', label: '按角色选用户', field: `cell_${nextId.value}`, required: false, placeholder: '请按角色选择用户', defaultValue: '' },
+      roleUsers: { type: 'roleUsers', label: '按角色多选用户', field: `cell_${nextId.value}`, required: false, placeholder: '请按角色选择用户', defaultValue: [] },
       dept: { type: 'dept', label: '单选部门', field: `cell_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: '' },
-      depts: { type: 'depts', label: '多选部门', field: `cell_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: [] }
+      depts: { type: 'depts', label: '多选部门', field: `cell_${nextId.value}`, required: false, placeholder: '请选择部门', defaultValue: [] },
+      dataTable: { type: 'dataTable', label: '表格组件', field: `dataTable_${nextId.value}`, columns: [
+        { prop: 'col1', label: '列1', width: 100 },
+        { prop: 'col2', label: '列2', width: 100 }
+      ], data: [], required: false }
     }
     
     if (rowIdx && colIdx) {

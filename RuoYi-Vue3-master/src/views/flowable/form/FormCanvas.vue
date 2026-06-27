@@ -185,6 +185,21 @@
           </div>
         </div>
         
+        <div v-else-if="comp.type === 'dataTable'" class="datatable-item">
+          <el-form-item :label="comp.label">
+            <FormDataTable 
+              :columns="comp.columns"
+              v-model:data="comp.data"
+              :border="comp.border"
+              :stripe="comp.stripe"
+              :size="comp.size"
+              :height="comp.height"
+              :editable="comp.editable"
+              :show-actions="comp.showActions"
+            />
+          </el-form-item>
+        </div>
+        
         <div class="item-actions">
           <el-button size="small" type="danger" @click.stop="emit('delete', comp.id)">删除</el-button>
         </div>
@@ -203,6 +218,7 @@ import ComponentRenderer from './ComponentRenderer.vue'
 import FormUserSelect from './FormUserSelect.vue'
 import FormRoleUserSelect from './FormRoleUserSelect.vue'
 import FormDeptSelect from './FormDeptSelect.vue'
+import FormDataTable from './FormDataTable.vue'
 
 const props = defineProps({
   formData: {
