@@ -3,7 +3,9 @@
     <div class="designer-header">
       <h2>表单设计器</h2>
       <div class="header-actions">
-        <el-button type="primary" @click="exportJson">导出JSON</el-button>
+        <el-button type="primary" @click="handlePreview">预览表单</el-button>
+        <el-button type="success" @click="handleSave">保存表单</el-button>
+        <el-button @click="exportJson">导出JSON</el-button>
         <el-button @click="clearForm">清空</el-button>
       </div>
     </div>
@@ -56,13 +58,37 @@
         <p>请选择一个组件</p>
       </div>
     </div>
+    
+    <!-- 预览弹窗 -->
+    <el-dialog v-model="previewVisible" title="表单预览" width="800px" top="5vh" append-to-body>
+      <FormPreview :form-data="formData" />
+    </el-dialog>
+    
+    <!-- 保存对话框 -->
+    <el-dialog v-model="saveVisible" title="保存表单" width="500px" append-to-body>
+      <el-form :model="saveForm" label-width="100px">
+        <el-form-item label="表单名称" required>
+          <el-input v-model="saveFormData.formName" placeholder="请输入表单名称" />
+        </el-form-item>
+        <el-form-item label="表单描述">
+          <el-input v-model="saveFormData.formDesc" type="textarea" placeholder="请输入表单描述" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="saveVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitSave">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import FormCanvas from './FormCanvas.vue'
 import PropertyPanel from './PropertyPanel.vue'
+import FormPreview from './FormPreview.vue'
+import { saveForm as saveFormApi } from '@/api/flowable/form'
 import {
   EditPen,
   Edit,
@@ -125,6 +151,47 @@ const formData = ref([
 
 const selectedComponent = ref(null)
 const nextId = ref(4)
+
+// 预览和保存相关数据
+const previewVisible = ref(false)
+const saveVisible = ref(false)
+const saveFormData = ref({
+  formName: '',
+  formDesc: ''
+})
+
+function handlePreview() {
+  previewVisible.value = true
+}
+
+function handleSave() {
+  saveVisible.value = true
+  saveFormData.value = {
+    formName: '',
+    formDesc: ''
+  }
+}
+
+async function submitSave() {
+  if (!saveFormData.value.formName) {
+    ElMessage.warning('请输入表单名称')
+    return
+  }
+  
+  const formJson = JSON.stringify(formData.value)
+  
+  try {
+    await saveFormApi({
+      formName: saveFormData.value.formName,
+      formDesc: saveFormData.value.formDesc,
+      formJson: formJson
+    })
+    ElMessage.success('保存成功')
+    saveVisible.value = false
+  } catch (error) {
+    ElMessage.error('保存失败：' + (error.message || '未知错误'))
+  }
+}
 
 function handleDragStart(e, comp) {
   e.dataTransfer.setData('componentType', comp.type)

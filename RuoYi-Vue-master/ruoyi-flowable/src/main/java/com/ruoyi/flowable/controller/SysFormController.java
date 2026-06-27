@@ -5,6 +5,7 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.flowable.domain.SysForm;
 import com.ruoyi.flowable.service.ISysFormService;
@@ -15,6 +16,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/flowable/form")
@@ -41,6 +43,10 @@ public class SysFormController extends BaseController {
     @Log(title = "表单", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@Validated @RequestBody SysForm form) {
+        // 如果没有提供formCode，则自动生成
+        if (StringUtils.isEmpty(form.getFormCode())) {
+            form.setFormCode("FORM_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase());
+        }
         return toAjax(formService.insertForm(form));
     }
 
