@@ -152,6 +152,33 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
+
+          <el-tab-pane label="条件" name="condition" v-if="selectedElement.type === 'bpmn:SequenceFlow' && isTargetExclusiveGateway">
+            <el-form label-width="80px" size="small" inline>
+              <el-form-item label="属性名称">
+                <el-select v-model="nodeConfig.conditionField" placeholder="请选择字段" style="width: 200px">
+                  <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="操作符号">
+                <el-select v-model="nodeConfig.conditionOperator" placeholder="请选择操作符" style="width: 150px">
+                  <el-option label="等于 (=)" value="==" />
+                  <el-option label="不等于 (!=)" value="!=" />
+                  <el-option label="大于 (>)" value=">" />
+                  <el-option label="大于等于 (>=)" value=">=" />
+                  <el-option label="小于 (<)" value="<" />
+                  <el-option label="小于等于 (<=)" value="<=" />
+                  <el-option label="包含 (contains)" value="contains" />
+                  <el-option label="不包含 (!contains)" value="!contains" />
+                  <el-option label="为空 (empty)" value="empty" />
+                  <el-option label="不为空 (!empty)" value="!empty" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="条件值">
+                <el-input v-model="nodeConfig.conditionValue" placeholder="请输入条件值" style="width: 200px" />
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
         </el-tabs>
       </div>
       <div v-else class="no-selection">
@@ -438,7 +465,10 @@ const nodeConfig = ref({
   assigneeFormComponent: null,
   countersign: false,
   passRate: 'all',
-  customPassRate: 100
+  customPassRate: 100,
+  conditionField: '',
+  conditionOperator: '',
+  conditionValue: ''
 })
 
 const ccUserVisible = ref(false)
@@ -527,6 +557,24 @@ const assigneeDisplayText = computed(() => {
     return selectedAssigneeFormComponent.value?.label || '请选择表单组件'
   }
   return '请选择审批人'
+})
+
+const isTargetExclusiveGateway = computed(() => {
+  if (!selectedElement.value || selectedElement.value.type !== 'bpmn:SequenceFlow' || !bpmnModeler) {
+    return false
+  }
+  try {
+    const elementRegistry = bpmnModeler.get('elementRegistry')
+    const element = elementRegistry.get(selectedElement.value.id)
+    if (!element || !element.businessObject) return false
+    const sourceRef = element.businessObject.sourceRef
+    if (!sourceRef) return false
+    // 获取源头节点的类型
+    const sourceElement = elementRegistry.get(sourceRef.id)
+    return sourceElement && sourceElement.type === 'bpmn:ExclusiveGateway'
+  } catch (e) {
+    return false
+  }
 })
 
 let bpmnModeler = null
@@ -742,6 +790,24 @@ async function saveProcess() {
             return `<bpmn:${type} id="${elementId}"${attrs} ${attrName}="${configStr.replace(/"/g, '&quot;')}">`
           })
         }
+
+        // 处理连接线的条件配置
+        if (attrs['flowable:conditionConfig'] && element.type === 'bpmn:SequenceFlow') {
+          const elementId = element.id
+          const configStr = attrs['flowable:conditionConfig']
+          const attrName = 'flowable:conditionConfig'
+          
+          // 在 XML 中找到对应的 sequenceFlow 标签并注入属性
+          const regex = new RegExp(`<bpmn:sequenceFlow\\s+id="${elementId}"([^>]*)>`, 'g')
+          modifiedXml = modifiedXml.replace(regex, (match, attrs) => {
+            // 检查是否已经有该属性
+            if (attrs.includes(attrName)) {
+              return match
+            }
+            // 添加属性
+            return `<bpmn:sequenceFlow id="${elementId}"${attrs} ${attrName}="${configStr.replace(/"/g, '&quot;')}">`
+          })
+        }
       }
     }
     
@@ -803,6 +869,15 @@ function saveCurrentNodeConfig(element, modeling) {
     // 直接设置到 businessObject 上
     bo.$attrs['flowable:userTaskConfig'] = JSON.stringify(config)
   }
+
+  if (element.type === 'bpmn:SequenceFlow') {
+    const config = {
+      conditionField: nodeConfig.value.conditionField || '',
+      conditionOperator: nodeConfig.value.conditionOperator || '',
+      conditionValue: nodeConfig.value.conditionValue || ''
+    }
+    bo.$attrs['flowable:conditionConfig'] = JSON.stringify(config)
+  }
 }
 
 async function loadNodeConfig(element, data) {
@@ -825,7 +900,10 @@ async function loadNodeConfig(element, data) {
     assigneeFormComponent: null,
     countersign: false,
     passRate: 'all',
-    customPassRate: 100
+    customPassRate: 100,
+    conditionField: '',
+    conditionOperator: '',
+    conditionValue: ''
   }
   selectedCcUsers.value = []
   selectedCcDepts.value = []
@@ -905,6 +983,23 @@ async function loadNodeConfig(element, data) {
         console.error('加载用户任务节点配置失败', e)
       }
     }
+    return
+  }
+
+  // 从 $attrs 加载连接线条件配置
+  if (element.type === 'bpmn:SequenceFlow') {
+    const configStr = bo.$attrs['flowable:conditionConfig']
+    if (configStr) {
+      try {
+        const config = JSON.parse(configStr)
+        nodeConfig.value.conditionField = config.conditionField || ''
+        nodeConfig.value.conditionOperator = config.conditionOperator || ''
+        nodeConfig.value.conditionValue = config.conditionValue || ''
+      } catch (e) {
+        console.error('加载连接线条件配置失败', e)
+      }
+    }
+    return
   }
 }
 
