@@ -400,6 +400,7 @@ import BpmnModeler from 'bpmn-js/lib/Modeler'
 import 'bpmn-js/dist/assets/diagram-js.css'
 import 'bpmn-js/dist/assets/bpmn-js.css'
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'
+import flowableModdle from 'flowable-bpmn-moddle/resources/camunda.json'
 import { updateProcess, getProcessXmlByKey } from '@/api/flowable'
 import { listUser } from '@/api/system/user'
 import { listDept } from '@/api/system/dept'
@@ -545,7 +546,10 @@ async function initBpmn() {
   processName.value = route.query.name || processKey
   
   bpmnModeler = new BpmnModeler({
-    container: canvasRef.value
+    container: canvasRef.value,
+    moddleExtensions: {
+      flowable: flowableModdle
+    }
   })
   
   const xml = await loadProcessXml(processKey)
@@ -703,11 +707,43 @@ async function saveProcess() {
     }
 
     const { xml } = await bpmnModeler.saveXML({ format: true })
+    
+    // 手动将扩展属性注入到 XML 中
+    let modifiedXml = xml
+    
+    // 遍历所有元素，将 $attrs 中的属性注入到 XML
+    const allElements = elementRegistry.getAll()
+    for (const element of allElements) {
+      if (element.businessObject && element.businessObject.$attrs) {
+        const bo = element.businessObject
+        const attrs = bo.$attrs
+        
+        // 检查是否有需要注入的属性
+        if (attrs['flowable:startEventConfig'] || attrs['flowable:userTaskConfig']) {
+          const elementId = element.id
+          const configStr = attrs['flowable:startEventConfig'] || attrs['flowable:userTaskConfig']
+          const attrName = attrs['flowable:startEventConfig'] ? 'flowable:startEventConfig' : 'flowable:userTaskConfig'
+          
+          // 在 XML 中找到对应的元素标签并注入属性
+          // 使用正则表达式匹配元素标签
+          const regex = new RegExp(`<bpmn:(startEvent|userTask)\\s+id="${elementId}"([^>]*)>`, 'g')
+          modifiedXml = modifiedXml.replace(regex, (match, type, attrs) => {
+            // 检查是否已经有该属性
+            if (attrs.includes(attrName)) {
+              return match
+            }
+            // 添加属性
+            return `<bpmn:${type} id="${elementId}"${attrs} ${attrName}="${configStr.replace(/"/g, '&quot;')}">`
+          })
+        }
+      }
+    }
+    
     const processKey = route.params.key
     await updateProcess({
       key: processKey,
       name: processName.value,
-      bpmnXml: xml
+      bpmnXml: modifiedXml
     })
     proxy.$modal.msgSuccess('保存成功')
   } catch (e) {
@@ -738,9 +774,8 @@ function saveCurrentNodeConfig(element, modeling) {
       ccRoles: selectedCcRoles.value.map(r => r.roleId),
       ccFormComponent: selectedCcFormComponent.value ? selectedCcFormComponent.value.key : null
     }
-    // 使用 flowable:startEventConfig 扩展属性存储配置
-    const configStr = JSON.stringify(config)
-    bo['flowable:startEventConfig'] = configStr
+    // 直接设置到 businessObject 上
+    bo.$attrs['flowable:startEventConfig'] = JSON.stringify(config)
   }
   
   if (element.type === 'bpmn:UserTask') {
@@ -758,9 +793,8 @@ function saveCurrentNodeConfig(element, modeling) {
       passRate: nodeConfig.value.passRate || 'all',
       customPassRate: nodeConfig.value.customPassRate || 100
     }
-    // 使用 flowable:userTaskConfig 扩展属性存储配置
-    const configStr = JSON.stringify(config)
-    bo['flowable:userTaskConfig'] = configStr
+    // 直接设置到 businessObject 上
+    bo.$attrs['flowable:userTaskConfig'] = JSON.stringify(config)
   }
 }
 
@@ -799,9 +833,9 @@ async function loadNodeConfig(element, data) {
 
   const bo = element.businessObject
 
-  // 从 flowable:startEventConfig 加载开始节点配置
+  // 从 $attrs 加载开始节点配置
   if (element.type === 'bpmn:StartEvent') {
-    const configStr = bo['flowable:startEventConfig'] || bo.get('flowable:startEventConfig')
+    const configStr = bo.$attrs['flowable:startEventConfig']
     if (configStr) {
       try {
         const config = JSON.parse(configStr)
@@ -832,9 +866,9 @@ async function loadNodeConfig(element, data) {
     return
   }
 
-  // 从 flowable:userTaskConfig 加载用户任务节点配置
+  // 从 $attrs 加载用户任务节点配置
   if (element.type === 'bpmn:UserTask') {
-    const configStr = bo['flowable:userTaskConfig'] || bo.get('flowable:userTaskConfig')
+    const configStr = bo.$attrs['flowable:userTaskConfig']
     if (configStr) {
       try {
         const config = JSON.parse(configStr)
@@ -1193,6 +1227,12 @@ function confirmCcFormComponent() {
 .canvas-container {
   width: 100%;
   height: 100%;
+}
+
+.canvas-container :deep(.djs-palette) {
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100% - 20px);
 }
 
 .canvas-container :deep(.bjs-container) {
