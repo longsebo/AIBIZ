@@ -795,17 +795,21 @@ async function saveProcess() {
         if (attrs['flowable:conditionConfig'] && element.type === 'bpmn:SequenceFlow') {
           const elementId = element.id
           const configStr = attrs['flowable:conditionConfig']
-          const attrName = 'flowable:conditionConfig'
+          const conditionExpression = attrs['flowable:conditionExpression']
           
           // 在 XML 中找到对应的 sequenceFlow 标签并注入属性
           const regex = new RegExp(`<bpmn:sequenceFlow\\s+id="${elementId}"([^>]*)>`, 'g')
-          modifiedXml = modifiedXml.replace(regex, (match, attrs) => {
-            // 检查是否已经有该属性
-            if (attrs.includes(attrName)) {
-              return match
+          modifiedXml = modifiedXml.replace(regex, (match, existingAttrs) => {
+            let newAttrs = existingAttrs
+            // 添加 conditionConfig 属性
+            if (!existingAttrs.includes('flowable:conditionConfig')) {
+              newAttrs += ` flowable:conditionConfig="${configStr.replace(/"/g, '&quot;')}"`
             }
-            // 添加属性
-            return `<bpmn:sequenceFlow id="${elementId}"${attrs} ${attrName}="${configStr.replace(/"/g, '&quot;')}">`
+            // 添加 conditionExpression 属性（Flowable 可执行的条件）
+            if (conditionExpression && !existingAttrs.includes('flowable:conditionExpression')) {
+              newAttrs += ` flowable:conditionExpression="${conditionExpression.replace(/"/g, '&quot;')}"`
+            }
+            return `<bpmn:sequenceFlow id="${elementId}"${newAttrs}>`
           })
         }
       }
@@ -827,6 +831,40 @@ async function saveProcess() {
 
 function goBack() {
   router.back()
+}
+
+function buildConditionExpression(config) {
+  if (!config.conditionField || !config.conditionOperator) {
+    return null
+  }
+  const field = `\${${config.conditionField}}`
+  const operator = config.conditionOperator
+  const value = config.conditionValue
+  
+  switch (operator) {
+    case '==':
+      return `${field} == '${value}'`
+    case '!=':
+      return `${field} != '${value}'`
+    case '>':
+      return `${field} > ${value}`
+    case '>=':
+      return `${field} >= ${value}`
+    case '<':
+      return `${field} < ${value}`
+    case '<=':
+      return `${field} <= ${value}`
+    case 'contains':
+      return `${field}.contains('${value}')`
+    case '!contains':
+      return `!${field}.contains('${value}')`
+    case 'empty':
+      return `${field} == null || ${field} == ''`
+    case '!empty':
+      return `${field} != null && ${field} != ''`
+    default:
+      return null
+  }
 }
 
 function saveCurrentNodeConfig(element, modeling) {
@@ -877,6 +915,12 @@ function saveCurrentNodeConfig(element, modeling) {
       conditionValue: nodeConfig.value.conditionValue || ''
     }
     bo.$attrs['flowable:conditionConfig'] = JSON.stringify(config)
+    
+    // 生成 Flowable 可执行的条件表达式
+    const expression = buildConditionExpression(config)
+    if (expression) {
+      bo.$attrs['flowable:conditionExpression'] = expression
+    }
   }
 }
 
