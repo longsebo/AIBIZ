@@ -27,11 +27,7 @@
          <el-table-column label="流程名称" align="center" prop="name" :show-overflow-tooltip="true" />
          <el-table-column label="流程Key" align="center" prop="key" :show-overflow-tooltip="true" width="150" />
          <el-table-column label="版本" align="center" prop="version" width="60" />
-         <el-table-column label="分类" align="center" prop="category" width="120">
-            <template #default="scope">
-               {{ getCategoryName(scope.row.category) }}
-            </template>
-         </el-table-column>
+         <el-table-column label="分类" align="center" prop="categoryName" width="120" />
          <el-table-column label="部署时间" align="center" prop="deploymentTime" width="180" />
          <el-table-column label="状态" align="center" prop="suspended" width="80">
             <template #default="scope">
@@ -211,12 +207,6 @@ async function getCategoryList() {
    }
 }
 
-function getCategoryName(categoryCode) {
-   if (!categoryCode) return '-'
-   const category = categoryList.value.find(item => item.categoryCode === categoryCode)
-   return category ? category.categoryName : categoryCode
-}
-
 function handleQuery() {
    getList()
 }
@@ -227,7 +217,8 @@ function resetQuery() {
    getList()
 }
 
-function generateDefaultBpmn(processName, processKey) {
+function generateDefaultBpmn(processName, processKey, category) {
+   const ns = category || 'other'
    return `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -236,7 +227,7 @@ function generateDefaultBpmn(processName, processKey) {
    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
    id="Definitions_${processKey}"
-   targetNamespace="http://flowable.org/bpmn20">
+   targetNamespace="${ns}">
    <process id="${processKey}" name="${processName}" isExecutable="true">
       <startEvent id="startEvent1" name="开始">
          <outgoing>flow1</outgoing>
@@ -289,7 +280,7 @@ async function submitAdd() {
    proxy.$refs["addRef"].validate(async valid => {
       if (valid) {
          try {
-            const bpmnXml = generateDefaultBpmn(addForm.name, addForm.key)
+            const bpmnXml = generateDefaultBpmn(addForm.name, addForm.key, addForm.category)
             await deployProcess({
                name: addForm.name,
                category: addForm.category,
@@ -310,7 +301,11 @@ function cancelAdd() {
 }
 
 function handleDesign(row) {
-   router.push({ path: '/flowable/process-designer/' + row.key, query: { name: row.name } })
+   let cat = row.category || ''
+   if (cat.startsWith('http://') || cat.startsWith('https://')) {
+      cat = ''
+   }
+   router.push({ path: '/flowable/process-designer/' + row.key, query: { name: row.name, category: cat } })
 }
 
 function handleStart(row) {

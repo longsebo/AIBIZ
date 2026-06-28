@@ -29,6 +29,9 @@ public class ProcessDefinition implements Serializable {
     /** 分类 */
     private String category;
 
+    /** 分类名称 */
+    private String categoryName;
+
     /** 流程定义文件名称 */
     private String resourceName;
 

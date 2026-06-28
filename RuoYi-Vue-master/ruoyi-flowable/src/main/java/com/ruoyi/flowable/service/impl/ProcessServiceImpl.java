@@ -3,6 +3,8 @@ package com.ruoyi.flowable.service.impl;
 import com.ruoyi.flowable.domain.ProcessDefinition;
 import com.ruoyi.flowable.domain.ProcessInstance;
 import com.ruoyi.flowable.domain.TaskInfo;
+import com.ruoyi.flowable.domain.SysFlowCategory;
+import com.ruoyi.flowable.service.ISysFlowCategoryService;
 import com.ruoyi.flowable.service.ProcessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,10 +45,12 @@ public class ProcessServiceImpl implements ProcessService {
     private final RuntimeService runtimeService;
     private final TaskService taskService;
     private final HistoryService historyService;
+    private final ISysFlowCategoryService categoryService;
 
     @Override
     public List<ProcessDefinition> listProcessDefinition() {
         List<ProcessDefinition> result = new ArrayList<>();
+        List<SysFlowCategory> categoryList = categoryService.selectCategoryAll();
         ProcessDefinitionQuery query = repositoryService.createProcessDefinitionQuery().latestVersion();
         List<org.flowable.engine.repository.ProcessDefinition> list = query.list();
         for (org.flowable.engine.repository.ProcessDefinition pd : list) {
@@ -56,6 +60,7 @@ public class ProcessServiceImpl implements ProcessService {
             d.setKey(pd.getKey());
             d.setVersion(pd.getVersion());
             d.setCategory(pd.getCategory());
+            d.setCategoryName(getCategoryName(pd.getCategory(), categoryList));
             d.setResourceName(pd.getResourceName());
             d.setDeploymentId(pd.getDeploymentId());
             d.setDiagramResourceName(pd.getDiagramResourceName());
@@ -68,6 +73,21 @@ public class ProcessServiceImpl implements ProcessService {
             result.add(d);
         }
         return result;
+    }
+
+    private String getCategoryName(String categoryCode, List<SysFlowCategory> categoryList) {
+        if (categoryCode == null || categoryCode.isEmpty()) {
+            return "-";
+        }
+        if (categoryCode.startsWith("http://") || categoryCode.startsWith("https://")) {
+            return "其他";
+        }
+        for (SysFlowCategory category : categoryList) {
+            if (categoryCode.equals(category.getCategoryCode())) {
+                return category.getCategoryName();
+            }
+        }
+        return categoryCode;
     }
 
     @Override

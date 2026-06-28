@@ -414,6 +414,7 @@ const router = useRouter()
 
 const canvasRef = ref(null)
 const processName = ref('')
+const processCategory = ref('')
 const selectedElement = ref(null)
 const activeTab = ref('basic')
 
@@ -544,6 +545,7 @@ onUnmounted(() => {
 async function initBpmn() {
   const processKey = route.params.key
   processName.value = route.query.name || processKey
+  processCategory.value = route.query.category || ''
   
   bpmnModeler = new BpmnModeler({
     container: canvasRef.value,
@@ -711,6 +713,10 @@ async function saveProcess() {
     // 手动将扩展属性注入到 XML 中
     let modifiedXml = xml
     
+    // 更新 targetNamespace 为流程分类编码
+    const ns = processCategory.value || 'other'
+    modifiedXml = modifiedXml.replace(/targetNamespace="[^"]*"/g, `targetNamespace="${ns}"`)
+    
     // 遍历所有元素，将 $attrs 中的属性注入到 XML
     const allElements = elementRegistry.getAll()
     for (const element of allElements) {
@@ -743,6 +749,7 @@ async function saveProcess() {
     await updateProcess({
       key: processKey,
       name: processName.value,
+      category: processCategory.value,
       bpmnXml: modifiedXml
     })
     proxy.$modal.msgSuccess('保存成功')
