@@ -1091,18 +1091,18 @@ async function loadFormFields() {
         const fields = []
 
         components.forEach(comp => {
-          if (comp.type !== 'title' && comp.type !== 'table') {
+          if (comp.type !== 'title' && comp.type !== 'table' && comp.field) {
             fields.push({
-              key: comp.id.toString(),
-              label: comp.label || comp.type
+              key: comp.field,
+              label: comp.label || comp.field
             })
           }
 
           if (comp.type === 'dataTable' && comp.columns) {
             comp.columns.forEach(col => {
-              if (col.type !== 'title') {
+              if (col.prop) {
                 fields.push({
-                  key: `${comp.id}_${col.prop}`,
+                  key: col.prop,
                   label: `${comp.label || '表格'}-${col.label || col.prop}`
                 })
               }
@@ -1111,10 +1111,10 @@ async function loadFormFields() {
 
           if (comp.type === 'table' && comp.children && comp.children.length > 0) {
             comp.children.forEach(child => {
-              if (child.type !== 'title') {
+              if (child.field) {
                 fields.push({
-                  key: child.id.toString(),
-                  label: `${comp.label || '表格布局'}-${child.label || child.type}`
+                  key: child.field,
+                  label: `${comp.label || '表格布局'}-${child.label || child.field}`
                 })
               }
             })
