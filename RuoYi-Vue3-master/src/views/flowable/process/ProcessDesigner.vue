@@ -842,7 +842,7 @@ async function saveProcess() {
 
               const multiInstanceXml = `
         <bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="assigneeList" flowable:elementVariable="assignee">
-          <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${completionCondition}</bpmn:completionCondition>
+          <bpmn:completionCondition>${completionCondition}</bpmn:completionCondition>
         </bpmn:multiInstanceLoopCharacteristics>`
 
               // 在 userTask 的结束标签前注入 multiInstanceLoopCharacteristics
@@ -850,7 +850,12 @@ async function saveProcess() {
               modifiedXml = modifiedXml.replace(regex, (match, openTag, innerContent, closeTag) => {
                 // 如果已经存在 multiInstanceLoopCharacteristics，先移除
                 const cleanedContent = innerContent.replace(/<bpmn:multiInstanceLoopCharacteristics[\s\S]*?<\/bpmn:multiInstanceLoopCharacteristics>/g, '')
-                return `${openTag}${cleanedContent}${multiInstanceXml}${closeTag}`
+                // 添加 flowable:assignee="${assignee}" 属性
+                let newOpenTag = openTag
+                if (!openTag.includes('flowable:assignee')) {
+                  newOpenTag = openTag.replace('>', ` flowable:assignee="${'${assignee}'}">`)
+                }
+                return `${newOpenTag}${cleanedContent}${multiInstanceXml}${closeTag}`
               })
             } else {
               // 如果关闭了会签，移除 multiInstanceLoopCharacteristics
