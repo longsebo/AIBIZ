@@ -120,6 +120,8 @@ public class ProcessServiceImpl implements ProcessService {
 
         org.flowable.engine.runtime.ProcessInstance pi = runtimeService.startProcessInstanceByKey(processDefinitionKey, businessKey, variables);
         
+        assignFirstTask(processDefinitionKey, pi.getId(), variables);
+        
         saveCcRecordsOnStart(pi);
         
         return convertProcessInstance(pi);
@@ -303,6 +305,167 @@ public class ProcessServiceImpl implements ProcessService {
     }
 
     /**
+     * 为流程实例的第一个用户任务分配审批人
+     */
+    private void assignFirstTask(String processDefinitionKey, String processInstanceId, Map<String, Object> variables) {
+        try {
+            log.info("开始为流程实例分配第一个任务审批人, processDefinitionKey={}, processInstanceId={}", processDefinitionKey, processInstanceId);
+
+            List<Task> unassignedTasks = taskService.createTaskQuery()
+                    .processInstanceId(processInstanceId)
+                    .taskAssignee(null)
+                    .list();
+            log.info("找到未分配任务数量={}", unassignedTasks.size());
+
+            if (unassignedTasks.isEmpty()) {
+                log.info("没有未分配的任务");
+                return;
+            }
+
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                    .createProcessDefinitionQuery()
+                    .processDefinitionKey(processDefinitionKey)
+                    .latestVersion()
+                    .singleResult();
+            if (pd == null) {
+                log.warn("未找到流程定义");
+                return;
+            }
+
+            InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+            if (is == null) {
+                log.warn("无法获取流程XML资源");
+                return;
+            }
+            String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+            for (Task task : unassignedTasks) {
+                String taskDefinitionKey = task.getTaskDefinitionKey();
+                log.info("处理未分配任务, taskId={}, taskDefinitionKey={}", task.getId(), taskDefinitionKey);
+
+                Map<String, String> userTask = extractUserTaskById(xml, taskDefinitionKey);
+                if (userTask == null) {
+                    log.warn("未找到任务配置, taskDefinitionKey={}", taskDefinitionKey);
+                    continue;
+                }
+
+                String userTaskConfig = userTask.get("config");
+                String innerContent = userTask.get("content");
+
+                boolean hasCountersign = innerContent != null && innerContent.contains("multiInstanceLoopCharacteristics");
+                log.info("任务是否配置会签={}", hasCountersign);
+
+                if (userTaskConfig == null || userTaskConfig.isEmpty()) {
+                    log.warn("用户任务的userTaskConfig为空");
+                    continue;
+                }
+
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                String decodedConfig = userTaskConfig.replace("&#34;", "\"").replace("&quot;", "\"");
+                Map<String, Object> config = mapper.readValue(decodedConfig, Map.class);
+
+                String assigneeType = (String) config.get("assigneeType");
+                List<String> assigneeList = new ArrayList<>();
+
+                if ("user".equals(assigneeType)) {
+                    List<Object> assigneeUsers = (List<Object>) config.get("assigneeUsers");
+                    if (assigneeUsers != null) {
+                        for (Object userId : assigneeUsers) {
+                            if (userId != null) {
+                                assigneeList.add(userId.toString());
+                            }
+                        }
+                    }
+                } else if ("dept".equals(assigneeType)) {
+                    List<Object> assigneeDepts = (List<Object>) config.get("assigneeDepts");
+                    if (assigneeDepts != null && !assigneeDepts.isEmpty()) {
+                        Set<String> userIds = new HashSet<>();
+                        StringBuilder sql = new StringBuilder(
+                            "select distinct u.user_id from sys_user u " +
+                            "inner join sys_dept d on u.dept_id = d.dept_id " +
+                            "where u.del_flag = '0' and (");
+                        List<Long> deptIds = new ArrayList<>();
+                        for (int i = 0; i < assigneeDepts.size(); i++) {
+                            if (i > 0) sql.append(" or ");
+                            sql.append("d.ancestors like concat(?, '%') or u.dept_id = ?");
+                            Long did = Long.valueOf(assigneeDepts.get(i).toString());
+                            deptIds.add(did);
+                            deptIds.add(did);
+                        }
+                        sql.append(")");
+                        List<Long> userIdList = jdbcTemplate.queryForList(sql.toString(), Long.class, deptIds.toArray());
+                        for (Long uid : userIdList) {
+                            userIds.add(uid.toString());
+                        }
+                        assigneeList.addAll(userIds);
+                    }
+                } else if ("role".equals(assigneeType)) {
+                    List<Object> assigneeRoles = (List<Object>) config.get("assigneeRoles");
+                    if (assigneeRoles != null && !assigneeRoles.isEmpty()) {
+                        Set<String> userIds = new HashSet<>();
+                        StringBuilder sql = new StringBuilder(
+                            "select distinct u.user_id from sys_user u " +
+                            "inner join sys_user_role ur on u.user_id = ur.user_id " +
+                            "where u.del_flag = '0' and ur.role_id in (");
+                        List<Long> roleIds = new ArrayList<>();
+                        for (int i = 0; i < assigneeRoles.size(); i++) {
+                            if (i > 0) sql.append(",");
+                            sql.append("?");
+                            roleIds.add(Long.valueOf(assigneeRoles.get(i).toString()));
+                        }
+                        sql.append(")");
+                        List<Long> userIdList = jdbcTemplate.queryForList(sql.toString(), Long.class, roleIds.toArray());
+                        for (Long uid : userIdList) {
+                            userIds.add(uid.toString());
+                        }
+                        assigneeList.addAll(userIds);
+                    }
+                } else if ("formComponent".equals(assigneeType)) {
+                    String fieldKey = (String) config.get("fieldKey");
+                    if (fieldKey != null) {
+                        Object fieldValue = variables.get(fieldKey);
+                        if (fieldValue instanceof String) {
+                            String[] ids = fieldValue.toString().split(",");
+                            for (String id : ids) {
+                                if (id != null && !id.trim().isEmpty()) {
+                                    assigneeList.add(id.trim());
+                                }
+                            }
+                        } else if (fieldValue instanceof List) {
+                            for (Object item : (List<?>) fieldValue) {
+                                if (item != null) {
+                                    assigneeList.add(item.toString());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!assigneeList.isEmpty()) {
+                    if (hasCountersign) {
+                        String assignee = assigneeList.get(0);
+                        taskService.setAssignee(task.getId(), assignee);
+                        log.info("已为会签任务分配审批人, taskId={}, assignee={}", task.getId(), assignee);
+                    } else {
+                        String assignee = assigneeList.get(0);
+                        taskService.setAssignee(task.getId(), assignee);
+                        log.info("已为普通任务分配审批人, taskId={}, assignee={}", task.getId(), assignee);
+                        if (assigneeList.size() > 1) {
+                            for (int i = 1; i < assigneeList.size(); i++) {
+                                taskService.addCandidateUser(task.getId(), assigneeList.get(i));
+                            }
+                        }
+                    }
+                } else {
+                    log.warn("未计算出审批人, taskId={}", task.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.error("为第一个任务分配审批人失败", e);
+        }
+    }
+
+    /**
      * 从BPMN XML中提取所有会签用户任务的配置
      */
     private List<Map<String, String>> extractCountersignUserTasks(String xml) {
@@ -481,11 +644,23 @@ public class ProcessServiceImpl implements ProcessService {
     @Override
     public List<TaskInfo> listMyTodoTask(String userId) {
         List<TaskInfo> result = new ArrayList<>();
-        TaskQuery query = taskService.createTaskQuery().taskAssignee(userId).orderByTaskCreateTime().desc();
-        List<Task> list = query.list();
-        for (Task t : list) {
+        Set<String> taskIds = new HashSet<>();
+        
+        TaskQuery assigneeQuery = taskService.createTaskQuery().taskAssignee(userId).orderByTaskCreateTime().desc();
+        List<Task> assigneeTasks = assigneeQuery.list();
+        for (Task t : assigneeTasks) {
+            taskIds.add(t.getId());
             result.add(convertTask(t));
         }
+        
+        TaskQuery candidateQuery = taskService.createTaskQuery().taskCandidateUser(userId).orderByTaskCreateTime().desc();
+        List<Task> candidateTasks = candidateQuery.list();
+        for (Task t : candidateTasks) {
+            if (!taskIds.contains(t.getId())) {
+                result.add(convertTask(t));
+            }
+        }
+        
         return result;
     }
 
@@ -524,21 +699,207 @@ public class ProcessServiceImpl implements ProcessService {
 
     @Override
     public void completeTask(String taskId, Map<String, Object> variables) {
-        if (variables != null && !variables.isEmpty()) {
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            return;
+        }
+        
+        if (variables == null) {
+            variables = new java.util.HashMap<>();
+        }
+        
+        String comment = (String) variables.remove("comment");
+        String action = (String) variables.remove("action");
+        
+        // 将评论信息保存到流程变量中，便于历史查询
+        if (comment != null && !comment.isEmpty()) {
+            variables.put("_COMMENT", comment);
+        }
+        if (action != null) {
+            variables.put("_ACTION", action);
+        }
+        
+        String processDefinitionKey = task.getProcessDefinitionId().split(":")[0];
+        resolveNextNodeAssignees(task.getProcessDefinitionId(), task.getTaskDefinitionKey(), variables);
+        
+        if (!variables.isEmpty()) {
             taskService.complete(taskId, variables);
         } else {
             taskService.complete(taskId);
         }
     }
 
+    private void resolveNextNodeAssignees(String processDefinitionId, String currentTaskDefinitionKey, Map<String, Object> variables) {
+        try {
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                    .createProcessDefinitionQuery()
+                    .processDefinitionId(processDefinitionId)
+                    .singleResult();
+            
+            if (pd == null) {
+                return;
+            }
+            
+            InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+            if (is == null) {
+                return;
+            }
+            
+            String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            Map<String, Object> currentVariables = variables;
+            
+            List<String> nextNodeIds = findNextNodeIds(xml, currentTaskDefinitionKey);
+            
+            for (String nodeId : nextNodeIds) {
+                String nodeType = identifyNodeType(xml, nodeId);
+                
+                if ("exclusiveGateway".equals(nodeType) || "parallelGateway".equals(nodeType) || "inclusiveGateway".equals(nodeType)) {
+                    List<String> gatewayNextNodes = findNextNodeIds(xml, nodeId);
+                    for (String gatewayNextNodeId : gatewayNextNodes) {
+                        String seqFlowId = findSequenceFlowId(xml, nodeId, gatewayNextNodeId);
+                        String condition = extractConditionExpression(xml, seqFlowId);
+                        boolean shouldTake = evaluateCondition(condition, currentVariables);
+                        
+                        if (shouldTake || "parallelGateway".equals(nodeType)) {
+                            String nextNodeType = identifyNodeType(xml, gatewayNextNodeId);
+                            if ("userTask".equals(nextNodeType)) {
+                                resolveUserTaskAssignees(xml, gatewayNextNodeId, currentVariables);
+                            }
+                        }
+                    }
+                } else if ("userTask".equals(nodeType)) {
+                    resolveUserTaskAssignees(xml, nodeId, currentVariables);
+                }
+            }
+        } catch (Exception e) {
+            log.error("解析下一节点审批人失败", e);
+        }
+    }
+
+    private void resolveUserTaskAssignees(String xml, String nodeId, Map<String, Object> variables) {
+        Map<String, String> taskInfo = extractUserTaskById(xml, nodeId);
+        if (taskInfo == null) {
+            return;
+        }
+        
+        String config = taskInfo.get("config");
+        if (config == null || config.isEmpty()) {
+            return;
+        }
+        
+        try {
+            String decodedConfig = config.replace("&#34;", "\"").replace("&quot;", "\"");
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> configMap = mapper.readValue(decodedConfig, Map.class);
+            
+            String assigneeType = (String) configMap.get("assigneeType");
+            List<String> assigneeList = new ArrayList<>();
+            
+            if ("user".equals(assigneeType)) {
+                List<Object> assigneeUsers = (List<Object>) configMap.get("assigneeUsers");
+                if (assigneeUsers != null) {
+                    for (Object userId : assigneeUsers) {
+                        if (userId != null) {
+                            assigneeList.add(userId.toString());
+                        }
+                    }
+                }
+            } else if ("dept".equals(assigneeType)) {
+                List<Object> assigneeDepts = (List<Object>) configMap.get("assigneeDepts");
+                if (assigneeDepts != null && !assigneeDepts.isEmpty()) {
+                    Set<String> userIds = new HashSet<>();
+                    StringBuilder sql = new StringBuilder(
+                        "select distinct u.user_id from sys_user u " +
+                        "inner join sys_dept d on u.dept_id = d.dept_id " +
+                        "where u.del_flag = '0' and (");
+                    List<Long> deptIds = new ArrayList<>();
+                    for (int i = 0; i < assigneeDepts.size(); i++) {
+                        if (i > 0) sql.append(" or ");
+                        sql.append("d.ancestors like concat(?, '%') or u.dept_id = ?");
+                        Long did = Long.valueOf(assigneeDepts.get(i).toString());
+                        deptIds.add(did);
+                        deptIds.add(did);
+                    }
+                    sql.append(")");
+                    List<Long> userIdList = jdbcTemplate.queryForList(sql.toString(), Long.class, deptIds.toArray());
+                    for (Long uid : userIdList) {
+                        userIds.add(uid.toString());
+                    }
+                    assigneeList.addAll(userIds);
+                }
+            } else if ("role".equals(assigneeType)) {
+                List<Object> assigneeRoles = (List<Object>) configMap.get("assigneeRoles");
+                if (assigneeRoles != null && !assigneeRoles.isEmpty()) {
+                    Set<String> userIds = new HashSet<>();
+                    StringBuilder sql = new StringBuilder(
+                        "select distinct u.user_id from sys_user u " +
+                        "inner join sys_user_role ur on u.user_id = ur.user_id " +
+                        "where u.del_flag = '0' and ur.role_id in (");
+                    List<Long> roleIds = new ArrayList<>();
+                    for (int i = 0; i < assigneeRoles.size(); i++) {
+                        if (i > 0) sql.append(",");
+                        sql.append("?");
+                        roleIds.add(Long.valueOf(assigneeRoles.get(i).toString()));
+                    }
+                    sql.append(")");
+                    List<Long> userIdList = jdbcTemplate.queryForList(sql.toString(), Long.class, roleIds.toArray());
+                    for (Long uid : userIdList) {
+                        userIds.add(uid.toString());
+                    }
+                    assigneeList.addAll(userIds);
+                }
+            } else if ("formComponent".equals(assigneeType)) {
+                String formField = (String) configMap.get("assigneeFormComponent");
+                if (formField != null && variables.containsKey(formField)) {
+                    Object fieldValue = variables.get(formField);
+                    if (fieldValue instanceof String) {
+                        String[] ids = ((String) fieldValue).split(",");
+                        for (String id : ids) {
+                            if (id != null && !id.trim().isEmpty()) {
+                                assigneeList.add(id.trim());
+                            }
+                        }
+                    } else if (fieldValue instanceof List) {
+                        for (Object item : (List<?>) fieldValue) {
+                            if (item != null) {
+                                assigneeList.add(item.toString());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (!assigneeList.isEmpty()) {
+                String innerContent = taskInfo.get("content");
+                if (innerContent != null && innerContent.contains("multiInstanceLoopCharacteristics")) {
+                    variables.put("assigneeList", assigneeList);
+                    log.info("已设置会签assigneeList={} for node {}", assigneeList, nodeId);
+                } else {
+                    String assignee = assigneeList.get(0);
+                    variables.put("assignee", assignee);
+                    log.info("已设置审批人assignee={} for node {}", assignee, nodeId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("解析用户任务审批人配置失败, nodeId={}", nodeId, e);
+        }
+    }
+
     @Override
     public void rejectTask(String taskId, String reason) {
-        // Flowable 8 通过设置流程变量 + 跳转到开始节点实现驳回
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) {
             return;
         }
-        // 简单驳回：删除当前任务并跳回发起人
+        
+        java.util.Map<String, Object> variables = new java.util.HashMap<>();
+        if (reason != null && !reason.isEmpty()) {
+            variables.put("_COMMENT", reason);
+        }
+        variables.put("_ACTION", "reject");
+        
+        runtimeService.setVariables(task.getExecutionId(), variables);
+        
         runtimeService.createChangeActivityStateBuilder()
                 .processInstanceId(task.getProcessInstanceId())
                 .moveActivityIdTo(task.getTaskDefinitionKey(), "startEvent")
@@ -646,5 +1007,428 @@ public class ProcessServiceImpl implements ProcessService {
                 .category(category)
                 .addString(name + ".bpmn20.xml", bpmnXml)
                 .deploy();
+    }
+
+    @Override
+    public com.ruoyi.flowable.domain.TaskDetail getTaskDetail(String taskId) {
+        com.ruoyi.flowable.domain.TaskDetail detail = new com.ruoyi.flowable.domain.TaskDetail();
+        
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            return null;
+        }
+        
+        detail.setTaskId(task.getId());
+        detail.setTaskName(task.getName());
+        detail.setProcessDefinitionId(task.getProcessDefinitionId());
+        detail.setProcessInstanceId(task.getProcessInstanceId());
+        detail.setExecutionId(task.getExecutionId());
+        detail.setAssignee(task.getAssignee());
+        detail.setCreateTime(task.getCreateTime());
+        
+        org.flowable.engine.runtime.ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(task.getProcessInstanceId()).singleResult();
+        if (pi != null) {
+            detail.setProcessDefinitionKey(pi.getProcessDefinitionKey());
+            detail.setProcessDefinitionName(pi.getProcessDefinitionName());
+            detail.setBusinessKey(pi.getBusinessKey());
+            detail.setStartUserId(pi.getStartUserId());
+            detail.setProcessVariables(runtimeService.getVariables(pi.getId()));
+        } else {
+            HistoricProcessInstance hpi = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(task.getProcessInstanceId()).singleResult();
+            if (hpi != null) {
+                detail.setProcessDefinitionKey(hpi.getProcessDefinitionKey());
+                detail.setProcessDefinitionName(hpi.getProcessDefinitionName());
+                detail.setBusinessKey(hpi.getBusinessKey());
+                detail.setStartUserId(hpi.getStartUserId());
+            }
+            Map<String, Object> variables = historyService.createHistoricVariableInstanceQuery()
+                    .processInstanceId(task.getProcessInstanceId()).list()
+                    .stream().collect(java.util.stream.Collectors.toMap(
+                            var -> var.getVariableName(),
+                            var -> var.getValue()
+                    ));
+            detail.setProcessVariables(variables);
+        }
+        
+        detail.setHistoryComments(queryHistoryComments(task.getProcessInstanceId(), task.getTaskDefinitionKey()));
+        
+        detail.setNextNodes(calculateNextNodes(task));
+        
+        detail.setCurrentNodeConfig(getCurrentNodeConfig(task));
+        
+        return detail;
+    }
+
+    private List<com.ruoyi.flowable.domain.TaskDetail.HistoryComment> queryHistoryComments(String processInstanceId, String currentTaskDefinitionKey) {
+        List<com.ruoyi.flowable.domain.TaskDetail.HistoryComment> comments = new ArrayList<>();
+        
+        List<HistoricTaskInstance> historyTasks = historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .finished()
+                .orderByHistoricTaskInstanceEndTime().asc()
+                .list();
+        
+        for (HistoricTaskInstance ht : historyTasks) {
+            com.ruoyi.flowable.domain.TaskDetail.HistoryComment comment = new com.ruoyi.flowable.domain.TaskDetail.HistoryComment();
+            comment.setTaskId(ht.getId());
+            comment.setTaskName(ht.getName());
+            comment.setAssignee(ht.getAssignee());
+            comment.setAssigneeName(getUserName(ht.getAssignee()));
+            comment.setCreateTime(ht.getCreateTime());
+            comment.setEndTime(ht.getEndTime());
+            
+            // 尝试从历史变量中获取评论信息
+            try {
+                java.util.List<org.flowable.variable.api.history.HistoricVariableInstance> vars = 
+                    historyService.createHistoricVariableInstanceQuery()
+                        .taskId(ht.getId())
+                        .list();
+                for (org.flowable.variable.api.history.HistoricVariableInstance var : vars) {
+                    if ("_COMMENT".equals(var.getVariableName())) {
+                        comment.setComment(String.valueOf(var.getValue()));
+                    } else if ("_ACTION".equals(var.getVariableName())) {
+                        comment.setAction(String.valueOf(var.getValue()));
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("获取历史评论失败", e);
+            }
+            
+            // 如果没有设置action，根据任务名称判断
+            if (comment.getAction() == null) {
+                String taskName = ht.getName();
+                if (taskName != null && taskName.contains("驳回")) {
+                    comment.setAction("reject");
+                } else {
+                    comment.setAction("complete");
+                }
+            }
+            
+            comments.add(comment);
+        }
+        
+        return comments;
+    }
+
+    private String getUserName(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return "";
+        }
+        try {
+            List<Map<String, Object>> users = jdbcTemplate.queryForList(
+                "select user_name from sys_user where user_id = ?", userId);
+            if (!users.isEmpty()) {
+                return (String) users.get(0).get("user_name");
+            }
+        } catch (Exception e) {
+            log.warn("查询用户名失败, userId={}", userId, e);
+        }
+        return userId;
+    }
+
+    private List<com.ruoyi.flowable.domain.TaskDetail.NextNode> calculateNextNodes(Task task) {
+        List<com.ruoyi.flowable.domain.TaskDetail.NextNode> nextNodes = new ArrayList<>();
+        
+        try {
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                    .createProcessDefinitionQuery()
+                    .processDefinitionId(task.getProcessDefinitionId())
+                    .singleResult();
+            
+            if (pd == null) {
+                return nextNodes;
+            }
+            
+            InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+            if (is == null) {
+                return nextNodes;
+            }
+            
+            String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            Map<String, Object> variables = runtimeService.getVariables(task.getExecutionId());
+            
+            String currentTaskDefinitionKey = task.getTaskDefinitionKey();
+            
+            List<String> nextNodeIds = findNextNodeIds(xml, currentTaskDefinitionKey);
+            
+            for (String nodeId : nextNodeIds) {
+                String nodeType = identifyNodeType(xml, nodeId);
+                
+                if ("sequenceFlow".equals(nodeType)) {
+                    continue;
+                }
+                
+                if ("exclusiveGateway".equals(nodeType) || "parallelGateway".equals(nodeType) || "inclusiveGateway".equals(nodeType)) {
+                    List<String> gatewayNextNodes = findNextNodeIds(xml, nodeId);
+                    for (String gatewayNextNodeId : gatewayNextNodes) {
+                        String seqFlowId = findSequenceFlowId(xml, nodeId, gatewayNextNodeId);
+                        String condition = extractConditionExpression(xml, seqFlowId);
+                        boolean shouldTake = evaluateCondition(condition, variables);
+                        
+                        if (shouldTake || "parallelGateway".equals(nodeType)) {
+                            String nextNodeType = identifyNodeType(xml, gatewayNextNodeId);
+                            if ("userTask".equals(nextNodeType)) {
+                                com.ruoyi.flowable.domain.TaskDetail.NextNode nextNode = buildNextNode(xml, gatewayNextNodeId, variables);
+                                if (nextNode != null) {
+                                    nextNodes.add(nextNode);
+                                }
+                            } else if ("endEvent".equals(nextNodeType)) {
+                                com.ruoyi.flowable.domain.TaskDetail.NextNode endNode = new com.ruoyi.flowable.domain.TaskDetail.NextNode();
+                                endNode.setNodeId(gatewayNextNodeId);
+                                endNode.setNodeName("结束");
+                                endNode.setNodeType("endEvent");
+                                nextNodes.add(endNode);
+                            }
+                        }
+                    }
+                } else if ("userTask".equals(nodeType)) {
+                    com.ruoyi.flowable.domain.TaskDetail.NextNode nextNode = buildNextNode(xml, nodeId, variables);
+                    if (nextNode != null) {
+                        nextNodes.add(nextNode);
+                    }
+                } else if ("endEvent".equals(nodeType)) {
+                    com.ruoyi.flowable.domain.TaskDetail.NextNode endNode = new com.ruoyi.flowable.domain.TaskDetail.NextNode();
+                    endNode.setNodeId(nodeId);
+                    endNode.setNodeName("结束");
+                    endNode.setNodeType("endEvent");
+                    nextNodes.add(endNode);
+                }
+            }
+        } catch (Exception e) {
+            log.error("计算下一节点失败, taskId={}", task.getId(), e);
+        }
+        
+        return nextNodes;
+    }
+
+    private String identifyNodeType(String xml, String nodeId) {
+        if (xml.contains("<bpmn:userTask id=\"" + nodeId + "\"")) {
+            return "userTask";
+        }
+        if (xml.contains("<bpmn:exclusiveGateway id=\"" + nodeId + "\"")) {
+            return "exclusiveGateway";
+        }
+        if (xml.contains("<bpmn:parallelGateway id=\"" + nodeId + "\"")) {
+            return "parallelGateway";
+        }
+        if (xml.contains("<bpmn:inclusiveGateway id=\"" + nodeId + "\"")) {
+            return "inclusiveGateway";
+        }
+        if (xml.contains("<bpmn:endEvent id=\"" + nodeId + "\"")) {
+            return "endEvent";
+        }
+        if (xml.contains("<bpmn:sequenceFlow id=\"" + nodeId + "\"")) {
+            return "sequenceFlow";
+        }
+        return "unknown";
+    }
+
+    private String findSequenceFlowId(String xml, String sourceRef, String targetRef) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            "<bpmn:sequenceFlow\\s+[^>]*id=\"([^\"]*)\"[^>]*sourceRef=\"" + sourceRef + "\"[^>]*targetRef=\"" + targetRef + "\"");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
+    }
+
+    private String extractConditionExpression(String xml, String seqFlowId) {
+        if (seqFlowId == null) {
+            return null;
+        }
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            "<bpmn:sequenceFlow\\s+[^>]*id=\"" + seqFlowId + "\"[^>]*>([\\s\\S]*?)</bpmn:sequenceFlow>");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            String content = matcher.group(1);
+            java.util.regex.Pattern conditionPattern = java.util.regex.Pattern.compile(
+                "<bpmn:conditionExpression[^>]*>([\\s\\S]*?)</bpmn:conditionExpression>");
+            java.util.regex.Matcher conditionMatcher = conditionPattern.matcher(content);
+            if (conditionMatcher.find()) {
+                return conditionMatcher.group(1).trim();
+            }
+        }
+        return null;
+    }
+
+    private boolean evaluateCondition(String condition, Map<String, Object> variables) {
+        if (condition == null || condition.isEmpty()) {
+            return true;
+        }
+        
+        String expr = condition.trim();
+        // 替换 ${variableName} 为实际值
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}]+)\\}");
+        java.util.regex.Matcher matcher = pattern.matcher(expr);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            String varName = matcher.group(1).trim();
+            Object value = variables.get(varName);
+            String replacement;
+            if (value == null) {
+                replacement = "null";
+            } else if (value instanceof String) {
+                replacement = "'" + value.toString().replace("'", "\\'") + "'";
+            } else {
+                replacement = value.toString();
+            }
+            matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        expr = sb.toString();
+        
+        try {
+            org.springframework.expression.ExpressionParser parser = new org.springframework.expression.spel.standard.SpelExpressionParser();
+            org.springframework.expression.EvaluationContext context = new org.springframework.expression.spel.support.StandardEvaluationContext();
+            for (Map.Entry<String, Object> entry : variables.entrySet()) {
+                context.setVariable(entry.getKey(), entry.getValue());
+            }
+            org.springframework.expression.Expression exp = parser.parseExpression(expr);
+            Boolean result = exp.getValue(context, Boolean.class);
+            return Boolean.TRUE.equals(result);
+        } catch (Exception e) {
+            log.warn("条件表达式计算失败, expr={}", expr, e);
+            return false;
+        }
+    }
+
+    private com.ruoyi.flowable.domain.TaskDetail.NextNode buildNextNode(String xml, String nodeId, Map<String, Object> variables) {
+        Map<String, String> taskInfo = extractUserTaskById(xml, nodeId);
+        if (taskInfo == null) {
+            return null;
+        }
+        
+        com.ruoyi.flowable.domain.TaskDetail.NextNode nextNode = new com.ruoyi.flowable.domain.TaskDetail.NextNode();
+        nextNode.setNodeId(nodeId);
+        
+        java.util.regex.Pattern namePattern = java.util.regex.Pattern.compile(
+            "<bpmn:userTask\\s+[^>]*id=\"" + nodeId + "\"[^>]*name=\"([^\"]*)\"");
+        java.util.regex.Matcher nameMatcher = namePattern.matcher(xml);
+        if (nameMatcher.find()) {
+            nextNode.setNodeName(nameMatcher.group(1));
+        } else {
+            nextNode.setNodeName("用户任务");
+        }
+        nextNode.setNodeType("userTask");
+        
+        String config = taskInfo.get("config");
+        nextNode.setConfig(config);
+        
+        List<String> assigneeNames = new ArrayList<>();
+        if (config != null && !config.isEmpty()) {
+            try {
+                String decodedConfig = config.replace("&#34;", "\"").replace("&quot;", "\"");
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Map<String, Object> configMap = mapper.readValue(decodedConfig, Map.class);
+                
+                String assigneeType = (String) configMap.get("assigneeType");
+                if ("user".equals(assigneeType)) {
+                    List<Object> assigneeUsers = (List<Object>) configMap.get("assigneeUsers");
+                    if (assigneeUsers != null) {
+                        for (Object userId : assigneeUsers) {
+                            assigneeNames.add(getUserName(userId.toString()));
+                        }
+                    }
+                } else if ("dept".equals(assigneeType)) {
+                    List<Object> assigneeDepts = (List<Object>) configMap.get("assigneeDepts");
+                    if (assigneeDepts != null && !assigneeDepts.isEmpty()) {
+                        Set<String> userIds = new HashSet<>();
+                        StringBuilder sql = new StringBuilder(
+                            "select distinct u.user_id, u.user_name from sys_user u " +
+                            "inner join sys_dept d on u.dept_id = d.dept_id " +
+                            "where u.del_flag = '0' and (");
+                        List<Long> deptIds = new ArrayList<>();
+                        for (int i = 0; i < assigneeDepts.size(); i++) {
+                            if (i > 0) sql.append(" or ");
+                            sql.append("d.ancestors like concat(?, '%') or u.dept_id = ?");
+                            Long did = Long.valueOf(assigneeDepts.get(i).toString());
+                            deptIds.add(did);
+                            deptIds.add(did);
+                        }
+                        sql.append(")");
+                        List<Map<String, Object>> users = jdbcTemplate.queryForList(sql.toString(), deptIds.toArray());
+                        for (Map<String, Object> user : users) {
+                            assigneeNames.add((String) user.get("user_name"));
+                        }
+                    }
+                } else if ("role".equals(assigneeType)) {
+                    List<Object> assigneeRoles = (List<Object>) configMap.get("assigneeRoles");
+                    if (assigneeRoles != null && !assigneeRoles.isEmpty()) {
+                        StringBuilder sql = new StringBuilder(
+                            "select distinct u.user_name from sys_user u " +
+                            "inner join sys_user_role ur on u.user_id = ur.user_id " +
+                            "where u.del_flag = '0' and ur.role_id in (");
+                        List<Long> roleIds = new ArrayList<>();
+                        for (int i = 0; i < assigneeRoles.size(); i++) {
+                            if (i > 0) sql.append(",");
+                            sql.append("?");
+                            roleIds.add(Long.valueOf(assigneeRoles.get(i).toString()));
+                        }
+                        sql.append(")");
+                        List<String> names = jdbcTemplate.queryForList(sql.toString(), String.class, roleIds.toArray());
+                        assigneeNames.addAll(names);
+                    }
+                } else if ("formComponent".equals(assigneeType)) {
+                    String formField = (String) configMap.get("assigneeFormComponent");
+                    if (formField != null && variables.containsKey(formField)) {
+                        Object fieldValue = variables.get(formField);
+                        if (fieldValue instanceof String) {
+                            String[] ids = ((String) fieldValue).split(",");
+                            for (String id : ids) {
+                                if (id != null && !id.trim().isEmpty()) {
+                                    assigneeNames.add(getUserName(id.trim()));
+                                }
+                            }
+                        } else if (fieldValue instanceof List) {
+                            for (Object item : (List<?>) fieldValue) {
+                                if (item != null) {
+                                    assigneeNames.add(getUserName(item.toString()));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("解析用户任务配置失败, nodeId={}", nodeId, e);
+            }
+        }
+        
+        nextNode.setAssigneeNames(assigneeNames);
+        
+        return nextNode;
+    }
+
+    private String getCurrentNodeConfig(Task task) {
+        try {
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                    .createProcessDefinitionQuery()
+                    .processDefinitionId(task.getProcessDefinitionId())
+                    .singleResult();
+            
+            if (pd == null) {
+                return null;
+            }
+            
+            InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+            if (is == null) {
+                return null;
+            }
+            
+            String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            Map<String, String> taskInfo = extractUserTaskById(xml, task.getTaskDefinitionKey());
+            
+            if (taskInfo != null) {
+                String config = taskInfo.get("config");
+                if (config != null) {
+                    return config.replace("&#34;", "\"").replace("&quot;", "\"");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("获取当前节点配置失败, taskId={}", task.getId(), e);
+        }
+        return null;
     }
 }

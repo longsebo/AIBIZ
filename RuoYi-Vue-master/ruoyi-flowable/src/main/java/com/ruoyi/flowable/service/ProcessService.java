@@ -120,6 +120,13 @@ public interface ProcessService {
     String getProcessXmlByKey(String processDefinitionKey);
 
     /**
+     * 获取任务详情
+     *
+     * @param taskId 任务ID
+     */
+    com.ruoyi.flowable.domain.TaskDetail getTaskDetail(String taskId);
+
+    /**
      * 更新并重新部署流程
      *
      * @param processDefinitionKey 流程定义Key

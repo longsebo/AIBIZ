@@ -589,7 +589,7 @@ public class SysMenuServiceImpl implements ISysMenuService
         while (it.hasNext())
         {
             SysMenu n = (SysMenu) it.next();
-            if (n.getParentId().longValue() == t.getMenuId().longValue())
+            if (StringUtils.isNotNull(n.getParentId()) && n.getParentId().longValue() == t.getMenuId().longValue())
             {
                 tlist.add(n);
             }

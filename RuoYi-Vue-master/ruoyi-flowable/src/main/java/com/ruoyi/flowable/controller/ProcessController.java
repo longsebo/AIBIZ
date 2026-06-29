@@ -125,7 +125,7 @@ public class ProcessController extends BaseController {
     @PreAuthorize("@ss.hasPermi('flowable:task:list')")
     @GetMapping("/myTodo")
     public AjaxResult myTodo() {
-        List<TaskInfo> list = processService.listMyTodoTask(getUsername());
+        List<TaskInfo> list = processService.listMyTodoTask(String.valueOf(getUserId()));
         return success(list);
     }
 
@@ -135,7 +135,7 @@ public class ProcessController extends BaseController {
     @PreAuthorize("@ss.hasPermi('flowable:task:list')")
     @GetMapping("/myDone")
     public AjaxResult myDone() {
-        List<TaskInfo> list = processService.listMyDoneTask(getUsername());
+        List<TaskInfo> list = processService.listMyDoneTask(String.valueOf(getUserId()));
         return success(list);
     }
 
@@ -181,6 +181,16 @@ public class ProcessController extends BaseController {
     }
 
     /**
+     * 获取任务详情
+     */
+    @PreAuthorize("@ss.hasPermi('flowable:task:list')")
+    @GetMapping("/task/detail/{taskId}")
+    public AjaxResult getTaskDetail(@PathVariable String taskId) {
+        com.ruoyi.flowable.domain.TaskDetail detail = processService.getTaskDetail(taskId);
+        return success(detail);
+    }
+
+    /**
      * 获取流程图
      */
     @PreAuthorize("@ss.hasPermi('flowable:process:query')")
@@ -195,7 +205,7 @@ public class ProcessController extends BaseController {
     /**
      * 根据流程Key获取流程XML
      */
-    @PreAuthorize("@ss.hasPermi('flowable:process:design')")
+    @PreAuthorize("@ss.hasPermi('flowable:process:queryxml')")
     @GetMapping("/xml/{processDefinitionKey}")
     public AjaxResult getXmlByKey(@PathVariable String processDefinitionKey) {
         String xml = processService.getProcessXmlByKey(processDefinitionKey);

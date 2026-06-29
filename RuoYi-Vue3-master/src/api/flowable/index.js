@@ -109,6 +109,14 @@ export function getProcessDiagram(processDefinitionId) {
   })
 }
 
+// 获取任务详情
+export function getTaskDetail(taskId) {
+  return request({
+    url: '/flowable/process/task/detail/' + taskId,
+    method: 'get'
+  })
+}
+
 // 更新并重新部署流程
 export function updateProcess(data) {
   return request({

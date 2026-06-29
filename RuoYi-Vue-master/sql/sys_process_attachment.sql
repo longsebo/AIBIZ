@@ -6,7 +6,7 @@ CREATE TABLE `sys_process_attachment` (
   `file_name` varchar(255) NOT NULL COMMENT '文件名',
   `file_path` varchar(500) NOT NULL COMMENT '文件路径',
   `file_size` bigint(20) DEFAULT NULL COMMENT '文件大小(字节)',
-  `file_type` varchar(50) DEFAULT NULL COMMENT '文件类型',
+  `file_type` varchar(200) DEFAULT NULL COMMENT '文件类型',
   `create_by` varchar(64) DEFAULT NULL COMMENT '创建人',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
