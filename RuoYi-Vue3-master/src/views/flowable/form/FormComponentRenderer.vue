@@ -79,7 +79,7 @@
     <el-form-item v-if="component.type === 'dataTable'" :label="showLabel ? component.label : ''" :label-width="labelWidth">
       <FormDataTable 
         :columns="component.columns"
-        :data="modelValue"
+        :data="Array.isArray(modelValue) ? modelValue : []"
         @update:data="emit('update:modelValue', $event)"
         :border="component.border"
         :stripe="component.stripe"

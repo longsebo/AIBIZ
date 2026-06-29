@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.flowable.mapper.SysProcessAttachmentMapper">
+
+    <resultMap type="SysProcessAttachment" id="SysProcessAttachmentResult">
+        <id     property="id"                column="id"                  />
+        <result property="processInstanceId" column="process_instance_id" />
+        <result property="processDefinitionId" column="process_definition_id" />
+        <result property="processKey"        column="process_key"         />
+        <result property="fileName"          column="file_name"           />
+        <result property="filePath"          column="file_path"           />
+        <result property="fileSize"          column="file_size"           />
+        <result property="fileType"          column="file_type"           />
+        <result property="createBy"          column="create_by"           />
+        <result property="createTime"        column="create_time"         />
+    </resultMap>
+
+    <sql id="selectProcessAttachmentVo">
+        select id, process_instance_id, process_definition_id, process_key, 
+               file_name, file_path, file_size, file_type, create_by, create_time
+        from sys_process_attachment
+    </sql>
+
+    <select id="selectAttachmentById" parameterType="Long" resultMap="SysProcessAttachmentResult">
+        <include refid="selectProcessAttachmentVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertAttachment" parameterType="SysProcessAttachment" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_process_attachment
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="processInstanceId != null">process_instance_id,</if>
+            <if test="processDefinitionId != null">process_definition_id,</if>
+            <if test="processKey != null">process_key,</if>
+            <if test="fileName != null">file_name,</if>
+            <if test="filePath != null">file_path,</if>
+            <if test="fileSize != null">file_size,</if>
+            <if test="fileType != null">file_type,</if>
+            <if test="createBy != null">create_by,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="processInstanceId != null">#{processInstanceId},</if>
+            <if test="processDefinitionId != null">#{processDefinitionId},</if>
+            <if test="processKey != null">#{processKey},</if>
+            <if test="fileName != null">#{fileName},</if>
+            <if test="filePath != null">#{filePath},</if>
+            <if test="fileSize != null">#{fileSize},</if>
+            <if test="fileType != null">#{fileType},</if>
+            <if test="createBy != null">#{createBy},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <insert id="batchInsertAttachment" parameterType="java.util.List">
+        insert into sys_process_attachment (process_instance_id, process_definition_id, process_key, 
+                                            file_name, file_path, file_size, file_type, create_by)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.processInstanceId}, #{item.processDefinitionId}, #{item.processKey},
+             #{item.fileName}, #{item.filePath}, #{item.fileSize}, #{item.fileType}, #{item.createBy})
+        </foreach>
+    </insert>
+
+    <select id="selectAttachmentByProcessInstanceId" parameterType="String" resultMap="SysProcessAttachmentResult">
+        <include refid="selectProcessAttachmentVo"/>
+        where process_instance_id = #{processInstanceId}
+        order by create_time desc
+    </select>
+
+    <delete id="deleteAttachmentByProcessInstanceId" parameterType="String">
+        delete from sys_process_attachment where process_instance_id = #{processInstanceId}
+    </delete>
+
+</mapper>

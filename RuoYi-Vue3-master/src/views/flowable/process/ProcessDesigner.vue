@@ -858,11 +858,14 @@ async function saveProcess() {
                 return `${newOpenTag}${cleanedContent}${multiInstanceXml}${closeTag}`
               })
             } else {
-              // 如果关闭了会签，移除 multiInstanceLoopCharacteristics
+              // 如果关闭了会签，移除 multiInstanceLoopCharacteristics 和 flowable:assignee
               const regex = new RegExp(`(<bpmn:userTask\\s+[^>]*id="${elementId}"[^>]*>)([\\s\\S]*?)(<\\/bpmn:userTask>)`, 'g')
               modifiedXml = modifiedXml.replace(regex, (match, openTag, innerContent, closeTag) => {
+                // 移除 flowable:assignee 属性
+                let newOpenTag = openTag.replace(/\s+flowable:assignee="[^"]*"/g, '')
+                // 移除 multiInstanceLoopCharacteristics
                 const cleanedContent = innerContent.replace(/<bpmn:multiInstanceLoopCharacteristics[\s\S]*?<\/bpmn:multiInstanceLoopCharacteristics>/g, '')
-                return `${openTag}${cleanedContent}${closeTag}`
+                return `${newOpenTag}${cleanedContent}${closeTag}`
               })
             }
           } catch (e) {

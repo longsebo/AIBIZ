@@ -23,14 +23,17 @@ import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.task.api.history.HistoricTaskInstanceQuery;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 流程服务实现
@@ -48,7 +51,7 @@ public class ProcessServiceImpl implements ProcessService {
     private final HistoryService historyService;
     private final ISysFlowCategoryService categoryService;
     private final ISysProcessCcService ccService;
-    private final com.ruoyi.system.service.ISysUserService userService;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public List<ProcessDefinition> listProcessDefinition() {
@@ -109,11 +112,284 @@ public class ProcessServiceImpl implements ProcessService {
 
     @Override
     public ProcessInstance startProcess(String processDefinitionKey, String businessKey, Map<String, Object> variables) {
+        if (variables == null) {
+            variables = new java.util.HashMap<>();
+        }
+
+        resolveCountersignAssignees(processDefinitionKey, variables);
+
         org.flowable.engine.runtime.ProcessInstance pi = runtimeService.startProcessInstanceByKey(processDefinitionKey, businessKey, variables);
         
         saveCcRecordsOnStart(pi);
         
         return convertProcessInstance(pi);
+    }
+
+    /**
+     * 解析会签用户任务的审批人配置，计算 assigneeList 变量
+     */
+    private void resolveCountersignAssignees(String processDefinitionKey, Map<String, Object> variables) {
+        try {
+            log.info("开始解析会签审批人配置, processDefinitionKey={}", processDefinitionKey);
+
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                    .createProcessDefinitionQuery()
+                    .processDefinitionKey(processDefinitionKey)
+                    .latestVersion()
+                    .singleResult();
+            if (pd == null) {
+                log.warn("未找到流程定义, processDefinitionKey={}", processDefinitionKey);
+                return;
+            }
+            log.info("找到流程定义, id={}, name={}, resourceName={}", pd.getId(), pd.getName(), pd.getResourceName());
+
+            InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+            if (is == null) {
+                log.warn("无法获取流程XML资源, deploymentId={}, resourceName={}", pd.getDeploymentId(), pd.getResourceName());
+                return;
+            }
+            String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            log.info("流程XML长度={}", xml.length());
+
+            String startEventId = extractStartEventId(xml);
+            log.info("找到startEvent节点id={}", startEventId);
+            if (startEventId == null || startEventId.isEmpty()) {
+                log.warn("未找到startEvent节点");
+                return;
+            }
+
+            List<String> nextNodeIds = findNextNodeIds(xml, startEventId);
+            log.info("startEvent的后续节点ids={}", nextNodeIds);
+            if (nextNodeIds.isEmpty()) {
+                log.warn("startEvent没有后续节点");
+                return;
+            }
+
+            Map<String, String> targetTask = null;
+            for (String nodeId : nextNodeIds) {
+                targetTask = extractUserTaskById(xml, nodeId);
+                if (targetTask != null) {
+                    log.info("找到后续用户任务节点id={}", nodeId);
+                    break;
+                }
+            }
+
+            if (targetTask == null) {
+                log.warn("startEvent的后续节点中未找到用户任务");
+                return;
+            }
+
+            String userTaskConfig = targetTask.get("config");
+            String innerContent = targetTask.get("content");
+            log.info("后续用户任务 - config原始值={}, content长度={}", userTaskConfig, innerContent != null ? innerContent.length() : 0);
+
+            boolean hasCountersign = innerContent != null && innerContent.contains("multiInstanceLoopCharacteristics");
+            log.info("后续用户任务是否配置会签={}", hasCountersign);
+
+            if (!hasCountersign) {
+                log.info("后续用户任务未配置会签，无需构造assigneeList");
+                return;
+            }
+
+            if (userTaskConfig == null || userTaskConfig.isEmpty()) {
+                log.warn("后续用户任务的userTaskConfig为空");
+                return;
+            }
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String decodedConfig = userTaskConfig.replace("&#34;", "\"").replace("&quot;", "\"");
+            Map<String, Object> config = mapper.readValue(decodedConfig, Map.class);
+            log.info("解析后的config={}", config);
+
+            String assigneeType = (String) config.get("assigneeType");
+            log.info("assigneeType={}", assigneeType);
+            List<String> assigneeList = new ArrayList<>();
+
+            if ("user".equals(assigneeType)) {
+                List<Object> assigneeUsers = (List<Object>) config.get("assigneeUsers");
+                log.info("指定用户模式, assigneeUsers={}", assigneeUsers);
+                if (assigneeUsers != null) {
+                    for (Object userId : assigneeUsers) {
+                        if (userId != null) {
+                            assigneeList.add(userId.toString());
+                        }
+                    }
+                }
+            } else if ("dept".equals(assigneeType)) {
+                List<Object> assigneeDepts = (List<Object>) config.get("assigneeDepts");
+                log.info("部门模式, assigneeDepts={}", assigneeDepts);
+                if (assigneeDepts != null && !assigneeDepts.isEmpty()) {
+                    Set<String> userIds = new HashSet<>();
+                    StringBuilder sql = new StringBuilder(
+                        "select distinct u.user_id from sys_user u " +
+                        "inner join sys_dept d on u.dept_id = d.dept_id " +
+                        "where u.del_flag = '0' and (");
+                    List<Long> deptIds = new ArrayList<>();
+                    for (int i = 0; i < assigneeDepts.size(); i++) {
+                        if (i > 0) sql.append(" or ");
+                        sql.append("d.ancestors like concat(?, '%') or u.dept_id = ?");
+                        Long did = Long.valueOf(assigneeDepts.get(i).toString());
+                        deptIds.add(did);
+                        deptIds.add(did);
+                    }
+                    sql.append(")");
+                    log.info("部门查询SQL={}, 参数={}", sql, deptIds);
+                    List<Long> userIdList = jdbcTemplate.queryForList(sql.toString(), Long.class, deptIds.toArray());
+                    log.info("查询到部门用户数量={}", userIdList.size());
+                    for (Long uid : userIdList) {
+                        userIds.add(uid.toString());
+                    }
+                    assigneeList.addAll(userIds);
+                }
+            } else if ("role".equals(assigneeType)) {
+                List<Object> assigneeRoles = (List<Object>) config.get("assigneeRoles");
+                log.info("角色模式, assigneeRoles={}", assigneeRoles);
+                if (assigneeRoles != null && !assigneeRoles.isEmpty()) {
+                    Set<String> userIds = new HashSet<>();
+                    StringBuilder sql = new StringBuilder(
+                        "select distinct u.user_id from sys_user u " +
+                        "inner join sys_user_role ur on u.user_id = ur.user_id " +
+                        "where u.del_flag = '0' and ur.role_id in (");
+                    List<Long> roleIds = new ArrayList<>();
+                    for (int i = 0; i < assigneeRoles.size(); i++) {
+                        if (i > 0) sql.append(",");
+                        sql.append("?");
+                        roleIds.add(Long.valueOf(assigneeRoles.get(i).toString()));
+                    }
+                    sql.append(")");
+                    log.info("角色查询SQL={}, 参数={}", sql, roleIds);
+                    List<Long> userIdList = jdbcTemplate.queryForList(sql.toString(), Long.class, roleIds.toArray());
+                    log.info("查询到角色用户数量={}", userIdList.size());
+                    for (Long uid : userIdList) {
+                        userIds.add(uid.toString());
+                    }
+                    assigneeList.addAll(userIds);
+                }
+            } else if ("formComponent".equals(assigneeType)) {
+                String formField = (String) config.get("assigneeFormComponent");
+                log.info("表单组件模式, formField={}, variables中是否存在={}", formField, variables.containsKey(formField));
+                if (formField != null && variables.containsKey(formField)) {
+                    Object fieldValue = variables.get(formField);
+                    log.info("表单字段值={}, 类型={}", fieldValue, fieldValue.getClass().getName());
+                    if (fieldValue instanceof String) {
+                        String[] ids = ((String) fieldValue).split(",");
+                        for (String id : ids) {
+                            if (id != null && !id.trim().isEmpty()) {
+                                assigneeList.add(id.trim());
+                            }
+                        }
+                    } else if (fieldValue instanceof List) {
+                        for (Object item : (List<?>) fieldValue) {
+                            if (item != null) {
+                                assigneeList.add(item.toString());
+                            }
+                        }
+                    }
+                }
+            } else {
+                log.warn("未知的审批人类型={}", assigneeType);
+            }
+
+            log.info("计算得到assigneeList={}, size={}", assigneeList, assigneeList.size());
+            if (!assigneeList.isEmpty()) {
+                variables.put("assigneeList", assigneeList);
+                log.info("已将assigneeList放入流程变量");
+            } else {
+                log.warn("assigneeList为空，未放入流程变量");
+            }
+        } catch (Exception e) {
+            log.error("解析会签审批人配置失败, processDefinitionKey={}", processDefinitionKey, e);
+        }
+    }
+
+    /**
+     * 从BPMN XML中提取所有会签用户任务的配置
+     */
+    private List<Map<String, String>> extractCountersignUserTasks(String xml) {
+        List<Map<String, String>> result = new ArrayList<>();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            "<bpmn:userTask\\s+([^>]*flowable:userTaskConfig=\"[^\"]*\"[^>]*)>([\\s\\S]*?)</bpmn:userTask>",
+            java.util.regex.Pattern.MULTILINE);
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        
+        int userTaskCount = 0;
+        int countersignCount = 0;
+        
+        while (matcher.find()) {
+            userTaskCount++;
+            String openTagAttrs = matcher.group(1);
+            String innerContent = matcher.group(2);
+            log.debug("找到用户任务, attrs长度={}, content长度={}", openTagAttrs.length(), innerContent.length());
+            
+            boolean hasCountersign = innerContent.contains("multiInstanceLoopCharacteristics");
+            log.debug("是否会签={}", hasCountersign);
+            
+            if (hasCountersign) {
+                countersignCount++;
+                java.util.regex.Pattern configPattern = java.util.regex.Pattern.compile("flowable:userTaskConfig=\"([^\"]*)\"");
+                java.util.regex.Matcher configMatcher = configPattern.matcher(openTagAttrs);
+                if (configMatcher.find()) {
+                    Map<String, String> task = new java.util.HashMap<>();
+                    task.put("config", configMatcher.group(1));
+                    result.add(task);
+                    log.debug("提取到会签配置, config长度={}", configMatcher.group(1).length());
+                } else {
+                    log.debug("未找到flowable:userTaskConfig属性");
+                }
+            }
+        }
+        
+        log.info("扫描完成: 用户任务总数={}, 会签任务数={}, 提取到配置数={}", userTaskCount, countersignCount, result.size());
+        return result;
+    }
+
+    /**
+     * 从BPMN XML中提取startEvent的id
+     */
+    private String extractStartEventId(String xml) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("<bpmn:startEvent\\s+id=\"([^\"]*)\"");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
+    }
+
+    /**
+     * 通过sequenceFlow找到指定节点的后续节点ids
+     */
+    private List<String> findNextNodeIds(String xml, String sourceNodeId) {
+        List<String> result = new ArrayList<>();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            "<bpmn:sequenceFlow\\s+[^>]*sourceRef=\"" + sourceNodeId + "\"[^>]*targetRef=\"([^\"]*)\"");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        while (matcher.find()) {
+            result.add(matcher.group(1));
+        }
+        return result;
+    }
+
+    /**
+     * 通过id提取用户任务的配置和内容
+     */
+    private Map<String, String> extractUserTaskById(String xml, String taskId) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            "<bpmn:userTask\\s+id=\"" + java.util.regex.Pattern.quote(taskId) + "\"([^>]*)>([\\s\\S]*?)</bpmn:userTask>");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            Map<String, String> task = new java.util.HashMap<>();
+            String attrs = matcher.group(1);
+            String content = matcher.group(2);
+            
+            java.util.regex.Pattern configPattern = java.util.regex.Pattern.compile("flowable:userTaskConfig=\"([^\"]*)\"");
+            java.util.regex.Matcher configMatcher = configPattern.matcher(attrs);
+            if (configMatcher.find()) {
+                task.put("config", configMatcher.group(1));
+            }
+            task.put("content", content);
+            return task;
+        }
+        return null;
     }
     
     private void saveCcRecordsOnStart(org.flowable.engine.runtime.ProcessInstance pi) {
@@ -148,7 +424,7 @@ public class ProcessServiceImpl implements ProcessService {
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("flowable:startEventConfig=\"([^\"]*)\"");
         java.util.regex.Matcher matcher = pattern.matcher(xml);
         if (matcher.find()) {
-            return matcher.group(1).replace("&quot;", "\"");
+            return matcher.group(1).replace("&#34;", "\"").replace("&quot;", "\"");
         }
         return null;
     }

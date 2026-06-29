@@ -39,17 +39,17 @@ public class SysProcessCcServiceImpl implements ISysProcessCcService {
         Set<Long> ccUserIdSet = new HashSet<>();
 
         if ("user".equals(ccType)) {
-            List<String> ccUsers = (List<String>) config.get("ccUsers");
+            List<Object> ccUsers = (List<Object>) config.get("ccUsers");
             if (ccUsers != null) {
-                for (String userId : ccUsers) {
-                    ccUserIdSet.add(Long.parseLong(userId));
+                for (Object userId : ccUsers) {
+                    ccUserIdSet.add(Long.valueOf(userId.toString()));
                 }
             }
         } else if ("dept".equals(ccType)) {
-            List<String> ccDepts = (List<String>) config.get("ccDepts");
+            List<Object> ccDepts = (List<Object>) config.get("ccDepts");
             if (ccDepts != null) {
-                for (String deptId : ccDepts) {
-                    SysDept dept = deptService.selectDeptById(Long.parseLong(deptId));
+                for (Object deptId : ccDepts) {
+                    SysDept dept = deptService.selectDeptById(Long.valueOf(deptId.toString()));
                     if (dept != null) {
                         List<SysUser> users = userService.selectUserList(new SysUser());
                         for (SysUser user : users) {
@@ -61,14 +61,14 @@ public class SysProcessCcServiceImpl implements ISysProcessCcService {
                 }
             }
         } else if ("role".equals(ccType)) {
-            List<String> ccRoles = (List<String>) config.get("ccRoles");
+            List<Object> ccRoles = (List<Object>) config.get("ccRoles");
             if (ccRoles != null) {
-                for (String roleId : ccRoles) {
-                    SysRole role = roleService.selectRoleById(Long.parseLong(roleId));
+                for (Object roleId : ccRoles) {
+                    SysRole role = roleService.selectRoleById(Long.valueOf(roleId.toString()));
                     if (role != null) {
                         List<SysUser> users = userService.selectUserList(new SysUser());
                         for (SysUser user : users) {
-                            if (hasRole(user, Long.parseLong(roleId))) {
+                            if (hasRole(user, Long.valueOf(roleId.toString()))) {
                                 ccUserIdSet.add(user.getUserId());
                             }
                         }

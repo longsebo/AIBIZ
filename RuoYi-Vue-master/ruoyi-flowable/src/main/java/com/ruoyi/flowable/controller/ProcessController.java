@@ -2,10 +2,13 @@ package com.ruoyi.flowable.controller;
 
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.flowable.domain.ProcessDefinition;
 import com.ruoyi.flowable.domain.ProcessInstance;
+import com.ruoyi.flowable.domain.SysProcessAttachment;
 import com.ruoyi.flowable.domain.TaskInfo;
 import com.ruoyi.flowable.service.ProcessService;
+import com.ruoyi.flowable.service.ISysProcessAttachmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +28,7 @@ import java.util.Map;
 public class ProcessController extends BaseController {
 
     private final ProcessService processService;
+    private final ISysProcessAttachmentService attachmentService;
 
     /**
      * 查询流程定义列表
@@ -71,6 +75,27 @@ public class ProcessController extends BaseController {
         @SuppressWarnings("unchecked")
         Map<String, Object> variables = (Map<String, Object>) params.get("variables");
         ProcessInstance pi = processService.startProcess(key, businessKey, variables);
+        
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> attachments = (java.util.List<Map<String, Object>>) params.get("attachments");
+        if (attachments != null && !attachments.isEmpty()) {
+            java.util.List<SysProcessAttachment> attachmentList = new java.util.ArrayList<>();
+            for (Map<String, Object> att : attachments) {
+                SysProcessAttachment attachment = new SysProcessAttachment();
+                attachment.setFileName((String) att.get("fileName"));
+                String filePath = (String) att.get("filePath");
+                if (filePath != null && filePath.startsWith("/profile/")) {
+                    filePath = filePath.substring("/profile/".length());
+                }
+                attachment.setFilePath(filePath);
+                attachment.setFileSize(att.get("fileSize") != null ? ((Number) att.get("fileSize")).longValue() : null);
+                attachment.setFileType((String) att.get("fileType"));
+                attachment.setCreateBy(SecurityUtils.getLoginUser().getUsername());
+                attachmentList.add(attachment);
+            }
+            attachmentService.saveAttachments(pi.getId(), pi.getProcessDefinitionId(), key, attachmentList);
+        }
+        
         return success(pi);
     }
 

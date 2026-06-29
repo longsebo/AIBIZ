@@ -69,26 +69,13 @@
          </template>
       </el-dialog>
 
-      <!-- 启动流程对话框 -->
-      <el-dialog v-model="startOpen" :title="'启动流程 - ' + startForm.name" width="500px" append-to-body>
-         <el-form ref="startRef" :model="startForm" :rules="startRules" label-width="100px">
-            <el-form-item label="业务键" prop="businessKey">
-               <el-input v-model="startForm.businessKey" placeholder="请输入业务键(如请假单ID)" />
-            </el-form-item>
-            <el-form-item label="申请人" prop="applicant">
-               <el-input v-model="startForm.applicant" placeholder="请输入申请人" />
-            </el-form-item>
-            <el-form-item label="申请事由" prop="reason">
-               <el-input v-model="startForm.reason" type="textarea" :rows="3" placeholder="请输入申请事由" />
-            </el-form-item>
-         </el-form>
-         <template #footer>
-            <div class="dialog-footer">
-               <el-button type="primary" @click="submitStart">确 定</el-button>
-               <el-button @click="cancelStart">取 消</el-button>
-            </div>
-         </template>
-      </el-dialog>
+      <!-- 启动流程组件 -->
+      <ProcessStart 
+         :visible="startOpen"
+         :process-key="startProcessKey"
+         :process-name="startProcessName"
+         @close="cancelStart"
+      />
 
       <!-- 流程图对话框 -->
       <el-dialog v-model="diagramOpen" title="流程图" width="80%" top="5vh" append-to-body>
@@ -134,6 +121,7 @@ import {
 import { listCategoryAll } from '@/api/flowable/category'
 import { listForm } from '@/api/flowable/form'
 import { bindProcessForm, updateProcessForm, getProcessFormByKey } from '@/api/flowable/processForm'
+import ProcessStart from './ProcessStart.vue'
 
 const { proxy } = getCurrentInstance()
 const router = useRouter()
@@ -150,16 +138,14 @@ const diagramOpen = ref(false)
 const bindOpen = ref(false)
 const diagramXml = ref('')
 const formList = ref([])
+const startProcessKey = ref('')
+const startProcessName = ref('')
 const addForm = reactive({ name: '', category: '', key: '' })
-const startForm = reactive({ key: '', name: '', businessKey: '', applicant: '', reason: '' })
 const bindForm = reactive({ id: '', processKey: '', processName: '', formId: '' })
 
 const addRules = {
    name: [{ required: true, message: '请输入流程名称', trigger: 'blur' }],
    key: [{ required: true, message: '请输入流程Key', trigger: 'blur' }]
-}
-const startRules = {
-   businessKey: [{ required: true, message: '请输入业务键', trigger: 'blur' }]
 }
 const bindRules = {
    formId: [{ required: true, message: '请选择表单', trigger: 'change' }]
@@ -309,30 +295,9 @@ function handleDesign(row) {
 }
 
 function handleStart(row) {
-   startForm.key = row.key
-   startForm.name = row.name
-   startForm.businessKey = ''
-   startForm.applicant = ''
-   startForm.reason = ''
+   startProcessKey.value = row.key
+   startProcessName.value = row.name
    startOpen.value = true
-}
-
-async function submitStart() {
-   const variables = {
-      applicant: startForm.applicant,
-      reason: startForm.reason
-   }
-   try {
-      await startProcess({
-         processDefinitionKey: startForm.key,
-         businessKey: startForm.businessKey,
-         variables: variables
-      })
-      proxy.$modal.msgSuccess('启动成功')
-      startOpen.value = false
-   } catch (error) {
-      proxy.$modal.msgError('启动失败')
-   }
 }
 
 function cancelStart() {
