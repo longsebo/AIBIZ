@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.flowable.mapper.SysProcessDraftMapper">
+
+    <resultMap type="com.ruoyi.flowable.domain.SysProcessDraft" id="SysProcessDraftResult">
+        <id     property="id"           column="id"           />
+        <result property="processKey"   column="process_key"  />
+        <result property="processName"  column="process_name" />
+        <result property="formData"     column="form_data"    />
+        <result property="attachments"  column="attachments"  />
+        <result property="createBy"     column="create_by"    />
+        <result property="createTime"   column="create_time"  />
+        <result property="updateTime"   column="update_time"  />
+        <result property="delFlag"      column="del_flag"     />
+    </resultMap>
+
+    <sql id="selectSysProcessDraftVo">
+        select id, process_key, process_name, form_data, attachments, create_by, create_time, update_time, del_flag 
+        from sys_process_draft
+        where del_flag = '0'
+    </sql>
+
+    <select id="selectSysProcessDraftList" parameterType="com.ruoyi.flowable.domain.SysProcessDraft" resultMap="SysProcessDraftResult">
+        <include refid="selectSysProcessDraftVo"/>
+        <where>
+            <if test="processKey != null and processKey != ''">and process_key = #{processKey}</if>
+            <if test="processName != null and processName != ''">and process_name like concat('%', #{processName}, '%')</if>
+            <if test="createBy != null">and create_by = #{createBy}</if>
+        </where>
+        order by update_time desc
+    </select>
+
+    <select id="selectSysProcessDraftById" parameterType="Long" resultMap="SysProcessDraftResult">
+        <include refid="selectSysProcessDraftVo"/>
+        and id = #{id}
+    </select>
+
+    <select id="selectSysProcessDraftByProcessKeyAndCreateBy" parameterType="com.ruoyi.flowable.domain.SysProcessDraft" resultMap="SysProcessDraftResult">
+        <include refid="selectSysProcessDraftVo"/>
+        and process_key = #{processKey} and create_by = #{createBy}
+    </select>
+
+    <insert id="insertSysProcessDraft" parameterType="com.ruoyi.flowable.domain.SysProcessDraft" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_process_draft (
+            process_key, process_name, form_data, attachments, create_by, del_flag
+        ) values (
+            #{processKey}, #{processName}, #{formData}, #{attachments}, #{createBy}, '0'
+        )
+    </insert>
+
+    <update id="updateSysProcessDraft" parameterType="com.ruoyi.flowable.domain.SysProcessDraft">
+        update sys_process_draft set
+            process_name = #{processName},
+            form_data = #{formData},
+            attachments = #{attachments},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteSysProcessDraftById" parameterType="Long">
+        update sys_process_draft set del_flag = '1' where id = #{id}
+    </delete>
+
+    <delete id="deleteSysProcessDraftByIds" parameterType="Long">
+        update sys_process_draft set del_flag = '1' where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+</mapper>

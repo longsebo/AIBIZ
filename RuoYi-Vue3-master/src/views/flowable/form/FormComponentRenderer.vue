@@ -2,38 +2,38 @@
   <div class="form-component-renderer">
     <!-- 单行输入框 -->
     <el-form-item v-if="component.type === 'input'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <el-input :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" />
+      <el-input :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :disabled="disabled" />
     </el-form-item>
     
     <!-- 多行输入框 -->
     <el-form-item v-if="component.type === 'textarea'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <el-input :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" type="textarea" :placeholder="component.placeholder" :rows="component.rows || 3" />
+      <el-input :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" type="textarea" :placeholder="component.placeholder" :rows="component.rows || 3" :disabled="disabled" />
     </el-form-item>
     
     <!-- 单选框 -->
     <el-form-item v-if="component.type === 'radio'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <el-radio-group :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)">
+      <el-radio-group :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :disabled="disabled">
         <el-radio v-for="opt in component.options" :key="opt" :label="opt">{{ opt }}</el-radio>
       </el-radio-group>
     </el-form-item>
     
     <!-- 复选框 -->
     <el-form-item v-if="component.type === 'checkbox'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <el-checkbox-group :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)">
+      <el-checkbox-group :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :disabled="disabled">
         <el-checkbox v-for="opt in component.options" :key="opt" :label="opt">{{ opt }}</el-checkbox>
       </el-checkbox-group>
     </el-form-item>
     
     <!-- 组合框 -->
     <el-form-item v-if="component.type === 'select'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <el-select :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" style="width: 100%">
+      <el-select :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" style="width: 100%" :disabled="disabled">
         <el-option v-for="opt in component.options" :key="opt" :label="opt" :value="opt" />
       </el-select>
     </el-form-item>
     
     <!-- 日期 -->
     <el-form-item v-if="component.type === 'date'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <el-date-picker :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" style="width: 100%" />
+      <el-date-picker :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" style="width: 100%" :disabled="disabled" />
     </el-form-item>
     
     <!-- 标题 -->
@@ -47,32 +47,32 @@
     
     <!-- 单选用户 -->
     <el-form-item v-if="component.type === 'user'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <FormUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="false" />
+      <FormUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="false" :disabled="disabled" />
     </el-form-item>
     
     <!-- 多选用户 -->
     <el-form-item v-if="component.type === 'users'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <FormUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="true" />
+      <FormUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="true" :disabled="disabled" />
     </el-form-item>
     
     <!-- 按角色选用户 -->
     <el-form-item v-if="component.type === 'roleUser'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <FormRoleUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="false" />
+      <FormRoleUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="false" :disabled="disabled" />
     </el-form-item>
     
     <!-- 按角色多选用户 -->
     <el-form-item v-if="component.type === 'roleUsers'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <FormRoleUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="true" />
+      <FormRoleUserSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="true" :disabled="disabled" />
     </el-form-item>
     
     <!-- 单选部门 -->
     <el-form-item v-if="component.type === 'dept'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <FormDeptSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="false" />
+      <FormDeptSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="false" :disabled="disabled" />
     </el-form-item>
     
     <!-- 多选部门 -->
     <el-form-item v-if="component.type === 'depts'" :label="showLabel ? component.label : ''" :required="component.required" :label-width="labelWidth">
-      <FormDeptSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="true" />
+      <FormDeptSelect :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" :placeholder="component.placeholder" :multiple="true" :disabled="disabled" />
     </el-form-item>
     
     <!-- 表格组件 -->
@@ -85,8 +85,8 @@
         :stripe="component.stripe"
         :size="component.size || 'small'"
         :height="component.height"
-        :editable="component.editable"
-        :show-actions="component.showActions"
+        :editable="disabled ? false : component.editable"
+        :show-actions="disabled ? false : component.showActions"
       />
     </el-form-item>
   </div>
@@ -114,6 +114,10 @@ const props = defineProps({
   labelWidth: {
     type: String,
     default: '120px'
+  },
+  disabled: {
+    type: Boolean,
+    default: false
   }
 })
 

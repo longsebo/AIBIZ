@@ -4,11 +4,12 @@
       :model-value="displayText" 
       :placeholder="placeholder"
       readonly
-      @click="openDialog"
+      :disabled="disabled"
+      @click="disabled ? undefined : openDialog"
       size="default"
     >
       <template #suffix>
-        <el-icon class="cursor-pointer" @click="openDialog"><OfficeBuilding /></el-icon>
+        <el-icon :class="disabled ? '' : 'cursor-pointer'" @click="disabled ? undefined : openDialog"><OfficeBuilding /></el-icon>
       </template>
     </el-input>
     
@@ -72,6 +73,10 @@ const props = defineProps({
     default: '请选择部门'
   },
   multiple: {
+    type: Boolean,
+    default: false
+  },
+  disabled: {
     type: Boolean,
     default: false
   }

@@ -4,11 +4,12 @@
       :model-value="displayText" 
       :placeholder="placeholder"
       readonly
-      @click="openDialog"
+      :disabled="disabled"
+      @click="disabled ? undefined : openDialog"
       size="default"
     >
       <template #suffix>
-        <el-icon class="cursor-pointer" @click="openDialog"><UserFilled /></el-icon>
+        <el-icon :class="disabled ? '' : 'cursor-pointer'" @click="disabled ? undefined : openDialog"><UserFilled /></el-icon>
       </template>
     </el-input>
     
@@ -97,6 +98,10 @@ const props = defineProps({
     default: '请按角色选择用户'
   },
   multiple: {
+    type: Boolean,
+    default: false
+  },
+  disabled: {
     type: Boolean,
     default: false
   }

@@ -7,6 +7,7 @@
           :component="comp"
           :model-value="formData[comp.field]"
           @update:model-value="handleFieldChange(comp.field, $event)"
+          :disabled="comp._disabled"
         />
         <div v-else-if="comp.type === 'table' && comp.children" class="form-table-layout">
           <div class="table-title">{{ comp.label }}</div>
@@ -18,6 +19,7 @@
                 @update:model-value="handleFieldChange(child.field, $event)"
                 :showLabel="false"
                 label-width="0"
+                :disabled="child._disabled"
               />
             </div>
           </div>
@@ -81,7 +83,7 @@
       <div class="dialog-footer">
         <el-button v-if="showSaveDraft" @click="handleSaveDraft">保存草稿</el-button>
         <el-button v-if="showClear" @click="handleClear">重置</el-button>
-        <el-button type="primary" @click="handleSubmit">提交</el-button>
+        <el-button v-if="showSubmit" type="primary" @click="handleSubmit">提交</el-button>
         <el-button @click="handleClose">取消</el-button>
       </div>
     </template>
@@ -135,13 +137,48 @@ const uploadUrl = '/common/upload'
 
 const showSaveDraft = computed(() => startEventConfig.value.buttons?.includes('saveDraft'))
 const showClear = computed(() => startEventConfig.value.buttons?.includes('clear'))
+const showSubmit = computed(() => true)
 
 const visibleComponents = computed(() => {
   const { writeFields = [], readonlyFields = [], hideFields = [] } = startEventConfig.value
-  return formComponents.value.filter(comp => {
+  
+  return formComponents.value.map(comp => {
+    const field = comp.field || comp.id?.toString()
+    const fullField = comp.label ? `${comp.label}-${field}` : field
+    let disabled = false
+    if (writeFields.length > 0) {
+      disabled = !writeFields.includes(field) && !writeFields.includes(fullField)
+    } else {
+      disabled = readonlyFields.includes(field) || readonlyFields.includes(fullField)
+    }
+    
+    let processedComp = { ...comp, _disabled: disabled }
+    
+    if (comp.type === 'table' && comp.children) {
+      processedComp.children = comp.children.filter(child => {
+        const childField = child.field || child.id?.toString()
+        const childFullField = comp.label ? `${comp.label}-${child.label || childField}` : childField
+        return !hideFields.includes(childField) && !hideFields.includes(childFullField)
+      }).map(child => {
+        const childField = child.field || child.id?.toString()
+        const childFullField = comp.label ? `${comp.label}-${child.label || childField}` : childField
+        let childDisabled = disabled
+        if (!disabled && writeFields.length > 0) {
+          childDisabled = !writeFields.includes(childField) && !writeFields.includes(childFullField)
+        } else if (!disabled && readonlyFields.length > 0) {
+          childDisabled = readonlyFields.includes(childField) || readonlyFields.includes(childFullField)
+        }
+        return { ...child, _disabled: childDisabled }
+      })
+    }
+    
+    return processedComp
+  }).filter(comp => {
     if (comp.type === 'title') return true
     const field = comp.field || comp.id?.toString()
-    if (hideFields.includes(field)) return false
+    const fullField = comp.label ? `${comp.label}-${field}` : field
+    if (hideFields.includes(field) || hideFields.includes(fullField)) return false
+    if (comp.type === 'table' && comp.children && comp.children.length === 0) return false
     return true
   })
 })
@@ -183,11 +220,30 @@ async function initForm() {
       }
     }
 
-    const processXmlRes = await fetch(`/flowable/process/xml/${props.processKey}`)
-    const xml = await processXmlRes.text()
-    const configMatch = xml.match(/flowable:startEventConfig="([^"]*)"/)
-    if (configMatch) {
-      startEventConfig.value = JSON.parse(configMatch[1].replace(/&quot;/g, '"'))
+    const processXmlRes = await request({
+      url: `/flowable/process/xml/${props.processKey}`,
+      method: 'get'
+    })
+    if (processXmlRes.data && processXmlRes.data.xml) {
+      const xml = processXmlRes.data.xml
+      const configMatch = xml.match(/flowable:startEventConfig="([^"]*)"/)
+      if (configMatch) {
+        startEventConfig.value = JSON.parse(configMatch[1].replace(/&#34;/g, '"').replace(/&quot;/g, '"'))
+      }
+    }
+
+    const draftRes = await request({
+      url: `/flowable/draft/getByProcessKey/${props.processKey}`,
+      method: 'get'
+    })
+    if (draftRes.data) {
+      const draft = draftRes.data
+      if (draft.formData) {
+        Object.assign(formData, JSON.parse(draft.formData))
+      }
+      if (draft.attachments) {
+        attachments.value = JSON.parse(draft.attachments)
+      }
     }
   } catch (e) {
     console.error('初始化表单失败', e)
@@ -273,8 +329,22 @@ async function handleSubmit() {
   }
 }
 
-function handleSaveDraft() {
-  ElMessage.info('保存草稿功能待实现')
+async function handleSaveDraft() {
+  try {
+    await request({
+      url: '/flowable/draft/save',
+      method: 'post',
+      data: {
+        processKey: props.processKey,
+        processName: props.processName,
+        formData: JSON.stringify(formData),
+        attachments: JSON.stringify(attachments.value)
+      }
+    })
+    ElMessage.success('草稿保存成功')
+  } catch (e) {
+    ElMessage.error('保存失败')
+  }
 }
 
 function handleClear() {
@@ -286,6 +356,8 @@ function handleClear() {
       formData[key] = ''
     }
   })
+  attachments.value = []
+  uploadFileList.value = []
 }
 
 function handleClose() {
