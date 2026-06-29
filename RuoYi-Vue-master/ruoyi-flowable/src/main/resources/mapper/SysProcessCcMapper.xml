@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.flowable.mapper.SysProcessCcMapper">
+
+    <resultMap type="SysProcessCc" id="SysProcessCcResult">
+        <id     property="id"                column="id"                  />
+        <result property="processInstanceId" column="process_instance_id" />
+        <result property="processDefinitionId" column="process_definition_id" />
+        <result property="processKey"        column="process_key"         />
+        <result property="processName"       column="process_name"        />
+        <result property="ccUserId"          column="cc_user_id"          />
+        <result property="ccUserName"        column="cc_user_name"        />
+        <result property="ccUserNickName"    column="cc_user_nick_name"   />
+        <result property="status"            column="status"              />
+        <result property="createTime"        column="create_time"         />
+        <result property="readTime"          column="read_time"           />
+    </resultMap>
+
+    <sql id="selectProcessCcVo">
+        select id, process_instance_id, process_definition_id, process_key, process_name, 
+               cc_user_id, cc_user_name, cc_user_nick_name, status, create_time, read_time
+        from sys_process_cc
+    </sql>
+
+    <insert id="insertCc" parameterType="SysProcessCc" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_process_cc
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="processInstanceId != null">process_instance_id,</if>
+            <if test="processDefinitionId != null">process_definition_id,</if>
+            <if test="processKey != null">process_key,</if>
+            <if test="processName != null">process_name,</if>
+            <if test="ccUserId != null">cc_user_id,</if>
+            <if test="ccUserName != null">cc_user_name,</if>
+            <if test="ccUserNickName != null">cc_user_nick_name,</if>
+            <if test="status != null">status,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="processInstanceId != null">#{processInstanceId},</if>
+            <if test="processDefinitionId != null">#{processDefinitionId},</if>
+            <if test="processKey != null">#{processKey},</if>
+            <if test="processName != null">#{processName},</if>
+            <if test="ccUserId != null">#{ccUserId},</if>
+            <if test="ccUserName != null">#{ccUserName},</if>
+            <if test="ccUserNickName != null">#{ccUserNickName},</if>
+            <if test="status != null">#{status},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <insert id="batchInsertCc" parameterType="java.util.List">
+        insert into sys_process_cc (process_instance_id, process_definition_id, process_key, 
+                                    process_name, cc_user_id, cc_user_name, cc_user_nick_name, status)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.processInstanceId}, #{item.processDefinitionId}, #{item.processKey},
+             #{item.processName}, #{item.ccUserId}, #{item.ccUserName}, #{item.ccUserNickName}, #{item.status})
+        </foreach>
+    </insert>
+
+    <select id="selectCcByUserId" parameterType="Long" resultMap="SysProcessCcResult">
+        <include refid="selectProcessCcVo"/>
+        where cc_user_id = #{ccUserId}
+        order by create_time desc
+    </select>
+
+    <select id="selectCcByProcessInstanceId" parameterType="String" resultMap="SysProcessCcResult">
+        <include refid="selectProcessCcVo"/>
+        where process_instance_id = #{processInstanceId}
+    </select>
+
+    <update id="updateCcStatus" parameterType="SysProcessCc">
+        update sys_process_cc
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="status != null">status = #{status},</if>
+            <if test="readTime != null">read_time = #{readTime},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCcByProcessInstanceId" parameterType="String">
+        delete from sys_process_cc where process_instance_id = #{processInstanceId}
+    </delete>
+
+</mapper>
