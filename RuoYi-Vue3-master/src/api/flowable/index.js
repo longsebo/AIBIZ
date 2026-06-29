@@ -125,3 +125,20 @@ export function getProcessXmlByKey(processDefinitionKey) {
     method: 'get'
   })
 }
+
+// 获取我的抄送列表
+export function listCc() {
+  return request({
+    url: '/flowable/cc/list',
+    method: 'get'
+  })
+}
+
+// 标记已读
+export function readCc(id) {
+  return request({
+    url: '/flowable/cc/read',
+    method: 'post',
+    params: { id: id }
+  })
+}

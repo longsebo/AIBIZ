@@ -174,6 +174,20 @@ export const dynamicRoutes = [
       }
     ]
   },
+  // 流程抄送
+  {
+    path: '/flowable/cc',
+    component: Layout,
+    permissions: ['flowable:cc:list'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/flowable/cc/index'),
+        name: 'ProcessCc',
+        meta: { title: '我的抄送', icon: 'user' }
+      }
+    ]
+  },
   // 表单设计器
   {
     path: '/flowable/form-design',

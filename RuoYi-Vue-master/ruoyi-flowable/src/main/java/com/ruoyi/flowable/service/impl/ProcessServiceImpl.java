@@ -5,6 +5,7 @@ import com.ruoyi.flowable.domain.ProcessInstance;
 import com.ruoyi.flowable.domain.TaskInfo;
 import com.ruoyi.flowable.domain.SysFlowCategory;
 import com.ruoyi.flowable.service.ISysFlowCategoryService;
+import com.ruoyi.flowable.service.ISysProcessCcService;
 import com.ruoyi.flowable.service.ProcessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,8 @@ public class ProcessServiceImpl implements ProcessService {
     private final TaskService taskService;
     private final HistoryService historyService;
     private final ISysFlowCategoryService categoryService;
+    private final ISysProcessCcService ccService;
+    private final com.ruoyi.system.service.ISysUserService userService;
 
     @Override
     public List<ProcessDefinition> listProcessDefinition() {
@@ -107,7 +110,47 @@ public class ProcessServiceImpl implements ProcessService {
     @Override
     public ProcessInstance startProcess(String processDefinitionKey, String businessKey, Map<String, Object> variables) {
         org.flowable.engine.runtime.ProcessInstance pi = runtimeService.startProcessInstanceByKey(processDefinitionKey, businessKey, variables);
+        
+        saveCcRecordsOnStart(pi);
+        
         return convertProcessInstance(pi);
+    }
+    
+    private void saveCcRecordsOnStart(org.flowable.engine.runtime.ProcessInstance pi) {
+        org.flowable.engine.repository.ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(pi.getProcessDefinitionId())
+                .singleResult();
+        
+        if (pd == null) {
+            return;
+        }
+        
+        try {
+            InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+            String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            String startEventConfig = extractStartEventConfig(xml);
+            
+            if (startEventConfig != null && !startEventConfig.isEmpty()) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                java.util.Map<String, Object> config = mapper.readValue(startEventConfig, java.util.Map.class);
+                
+                String ccType = (String) config.get("ccType");
+                
+                ccService.saveCcRecords(pi.getId(), pi.getProcessDefinitionId(), 
+                        pi.getProcessDefinitionKey(), pd.getName(), config, ccType);
+            }
+        } catch (Exception e) {
+            log.error("保存抄送记录失败", e);
+        }
+    }
+    
+    private String extractStartEventConfig(String xml) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("flowable:startEventConfig=\"([^\"]*)\"");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            return matcher.group(1).replace("&quot;", "\"");
+        }
+        return null;
     }
 
     @Override

@@ -57,9 +57,19 @@ VALUES('任务委派', @taskId, 4, '#', '', 1, 0, 'F', '0', '0', 'flowable:task:
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
 VALUES('任务认领', @taskId, 5, '#', '', 1, 0, 'F', '0', '0', 'flowable:task:claim', '#', 'admin', NOW(), '');
 
+-- 我的抄送
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('我的抄送', @parentId, 3, 'cc', 'flowable/cc/index', 1, 0, 'C', '0', '0', 'flowable:cc:list', 'user', 'admin', NOW(), '我的抄送菜单');
+
+SET @ccId = LAST_INSERT_ID();
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('抄送列表', @ccId, 1, '#', '', 1, 0, 'F', '0', '0', 'flowable:cc:list', '#', 'admin', NOW(), '');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
+VALUES('标记已读', @ccId, 2, '#', '', 1, 0, 'F', '0', '0', 'flowable:cc:read', '#', 'admin', NOW(), '');
+
 -- 表单管理
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)
-VALUES('表单管理', @parentId, 3, 'form', 'flowable/form/index', 1, 0, 'C', '0', '0', 'flowable:form:list', 'edit', 'admin', NOW(), '表单管理菜单');
+VALUES('表单管理', @parentId, 4, 'form', 'flowable/form/index', 1, 0, 'C', '0', '0', 'flowable:form:list', 'edit', 'admin', NOW(), '表单管理菜单');
 
 SET @formId = LAST_INSERT_ID();
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, remark)

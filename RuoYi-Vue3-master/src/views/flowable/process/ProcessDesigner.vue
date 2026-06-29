@@ -812,6 +812,58 @@ async function saveProcess() {
             return `<bpmn:sequenceFlow id="${elementId}"${newAttrs}>`
           })
         }
+
+        // 处理用户任务的会签配置（multiInstanceLoopCharacteristics）
+        if (element.type === 'bpmn:UserTask' && attrs['flowable:userTaskConfig']) {
+          const elementId = element.id
+          const configStr = attrs['flowable:userTaskConfig']
+          try {
+            const config = JSON.parse(configStr.replace(/&quot;/g, '"'))
+            if (config.countersign) {
+              // 构建 completionCondition
+              let completionCondition = ''
+              switch (config.passRate) {
+                case 'all':
+                  completionCondition = '${nrOfCompletedInstances == nrOfInstances}'
+                  break
+                case 'half':
+                  completionCondition = '${nrOfCompletedInstances/nrOfInstances >= 0.5}'
+                  break
+                case 'twoThirds':
+                  completionCondition = '${nrOfCompletedInstances/nrOfInstances >= 0.67}'
+                  break
+                case 'custom':
+                  const rate = (config.customPassRate || 100) / 100
+                  completionCondition = `\${nrOfCompletedInstances/nrOfInstances >= ${rate}}`
+                  break
+                default:
+                  completionCondition = '${nrOfCompletedInstances == nrOfInstances}'
+              }
+
+              const multiInstanceXml = `
+        <bpmn:multiInstanceLoopCharacteristics isSequential="false" flowable:collection="assigneeList" flowable:elementVariable="assignee">
+          <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${completionCondition}</bpmn:completionCondition>
+        </bpmn:multiInstanceLoopCharacteristics>`
+
+              // 在 userTask 的结束标签前注入 multiInstanceLoopCharacteristics
+              const regex = new RegExp(`(<bpmn:userTask\\s+[^>]*id="${elementId}"[^>]*>)([\\s\\S]*?)(<\\/bpmn:userTask>)`, 'g')
+              modifiedXml = modifiedXml.replace(regex, (match, openTag, innerContent, closeTag) => {
+                // 如果已经存在 multiInstanceLoopCharacteristics，先移除
+                const cleanedContent = innerContent.replace(/<bpmn:multiInstanceLoopCharacteristics[\s\S]*?<\/bpmn:multiInstanceLoopCharacteristics>/g, '')
+                return `${openTag}${cleanedContent}${multiInstanceXml}${closeTag}`
+              })
+            } else {
+              // 如果关闭了会签，移除 multiInstanceLoopCharacteristics
+              const regex = new RegExp(`(<bpmn:userTask\\s+[^>]*id="${elementId}"[^>]*>)([\\s\\S]*?)(<\\/bpmn:userTask>)`, 'g')
+              modifiedXml = modifiedXml.replace(regex, (match, openTag, innerContent, closeTag) => {
+                const cleanedContent = innerContent.replace(/<bpmn:multiInstanceLoopCharacteristics[\s\S]*?<\/bpmn:multiInstanceLoopCharacteristics>/g, '')
+                return `${openTag}${cleanedContent}${closeTag}`
+              })
+            }
+          } catch (e) {
+            console.error('解析会签配置失败', e)
+          }
+        }
       }
     }
     
@@ -1025,6 +1077,31 @@ async function loadNodeConfig(element, data) {
         }
       } catch (e) {
         console.error('加载用户任务节点配置失败', e)
+      }
+    }
+
+    // 从 multiInstanceLoopCharacteristics 解析会签配置（兼容标准 BPMN）
+    if (bo.loopCharacteristics || bo.multiInstanceLoopCharacteristics) {
+      const mi = bo.loopCharacteristics || bo.multiInstanceLoopCharacteristics
+      if (mi.isSequential !== undefined || mi.$type === 'bpmn:MultiInstanceLoopCharacteristics') {
+        nodeConfig.value.countersign = true
+        // 从 completionCondition 解析通过率
+        if (mi.completionCondition) {
+          const condText = mi.completionCondition.body || ''
+          if (condText.includes('nrOfCompletedInstances == nrOfInstances')) {
+            nodeConfig.value.passRate = 'all'
+          } else if (condText.includes('>= 0.5')) {
+            nodeConfig.value.passRate = 'half'
+          } else if (condText.includes('>= 0.67')) {
+            nodeConfig.value.passRate = 'twoThirds'
+          } else {
+            nodeConfig.value.passRate = 'custom'
+            const match = condText.match(/>= ([\d.]+)/)
+            if (match) {
+              nodeConfig.value.customPassRate = Math.round(parseFloat(match[1]) * 100)
+            }
+          }
+        }
       }
     }
     return
