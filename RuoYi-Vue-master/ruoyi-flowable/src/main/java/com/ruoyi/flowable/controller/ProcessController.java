@@ -10,6 +10,7 @@ import com.ruoyi.flowable.domain.TaskInfo;
 import com.ruoyi.flowable.service.ProcessService;
 import com.ruoyi.flowable.service.ISysProcessAttachmentService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.engine.RepositoryService;
 import org.flowable.image.ProcessDiagramGenerator;
@@ -31,6 +32,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/flowable/process")
 @RequiredArgsConstructor
+@Slf4j
 public class ProcessController extends BaseController {
 
     private final ProcessService processService;
@@ -258,6 +260,20 @@ public class ProcessController extends BaseController {
         String name = params.get("name");
         String category = params.get("category");
         String bpmnXml = params.get("bpmnXml");
+        
+        log.info("收到流程更新请求, key={}, name={}, category={}", key, name, category);
+        if (bpmnXml != null) {
+            java.util.regex.Pattern seqFlowPattern = java.util.regex.Pattern.compile(
+                "<bpmn:sequenceFlow[^>]*>([\\s\\S]*?)</bpmn:sequenceFlow>");
+            java.util.regex.Matcher matcher = seqFlowPattern.matcher(bpmnXml);
+            while (matcher.find()) {
+                String seqFlow = matcher.group(0);
+                if (seqFlow.contains("condition") || seqFlow.contains("flowable:")) {
+                    log.info("连接线内容: {}", seqFlow);
+                }
+            }
+        }
+        
         processService.updateAndDeployProcess(key, name, category, bpmnXml);
         return success();
     }

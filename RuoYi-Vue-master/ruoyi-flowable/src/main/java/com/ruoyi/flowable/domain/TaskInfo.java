@@ -41,6 +41,9 @@ public class TaskInfo implements Serializable {
     /** 任务办理人 */
     private String assignee;
 
+    /** 任务办理人名称 */
+    private String assigneeName;
+
     /** 候选用户 */
     private String candidateUser;
 

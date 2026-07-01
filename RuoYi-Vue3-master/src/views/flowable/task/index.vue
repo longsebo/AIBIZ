@@ -22,7 +22,11 @@
                <el-table-column label="任务ID" align="center" prop="id" width="180" :show-overflow-tooltip="true" />
                <el-table-column label="任务名称" align="center" prop="name" :show-overflow-tooltip="true" />
                <el-table-column label="流程名称" align="center" prop="processDefinitionName" :show-overflow-tooltip="true" />
-               <el-table-column label="办理人" align="center" prop="assignee" width="100" />
+               <el-table-column label="办理人" align="center" width="100">
+                  <template #default="scope">
+                     {{ scope.row.assigneeName || scope.row.assignee }}
+                  </template>
+               </el-table-column>
                <el-table-column label="创建时间" align="center" prop="createTime" width="160" />
             </el-table>
          </el-tab-pane>

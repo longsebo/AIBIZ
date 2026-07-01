@@ -807,19 +807,23 @@ async function saveProcess() {
           const configStr = attrs['flowable:conditionConfig']
           const conditionExpression = attrs['flowable:conditionExpression']
           
-          // 在 XML 中找到对应的 sequenceFlow 标签并注入属性
-          const regex = new RegExp(`<bpmn:sequenceFlow\\s+id="${elementId}"([^>]*)>`, 'g')
-          modifiedXml = modifiedXml.replace(regex, (match, existingAttrs) => {
+          // 在 XML 中找到对应的 sequenceFlow 标签并注入属性和条件表达式标签
+          const regex = new RegExp(`<bpmn:sequenceFlow\\s+id="${elementId}"([^>]*)>([\\s\\S]*?)</bpmn:sequenceFlow>`, 'g')
+          modifiedXml = modifiedXml.replace(regex, (match, existingAttrs, innerContent) => {
             let newAttrs = existingAttrs
             // 添加 conditionConfig 属性
             if (!existingAttrs.includes('flowable:conditionConfig')) {
               newAttrs += ` flowable:conditionConfig="${configStr.replace(/"/g, '&quot;')}"`
             }
-            // 添加 conditionExpression 属性（Flowable 可执行的条件）
-            if (conditionExpression && !existingAttrs.includes('flowable:conditionExpression')) {
-              newAttrs += ` flowable:conditionExpression="${conditionExpression.replace(/"/g, '&quot;')}"`
+            
+            let newInnerContent = innerContent
+            // 如果有条件表达式，移除旧的 conditionExpression 标签并添加新的
+            if (conditionExpression) {
+              newInnerContent = innerContent.replace(/<bpmn:conditionExpression[\s\S]*?<\/bpmn:conditionExpression>/g, '')
+              newInnerContent += `<bpmn:conditionExpression xsi:type="bpmn:tExpression">${conditionExpression}</bpmn:conditionExpression>`
             }
-            return `<bpmn:sequenceFlow id="${elementId}"${newAttrs}>`
+            
+            return `<bpmn:sequenceFlow id="${elementId}"${newAttrs}>${newInnerContent}</bpmn:sequenceFlow>`
           })
         }
 
@@ -907,34 +911,47 @@ function buildConditionExpression(config) {
   if (!config.conditionField || !config.conditionOperator) {
     return null
   }
-  const field = `\${${config.conditionField}}`
+  const field = config.conditionField
   const operator = config.conditionOperator
   const value = config.conditionValue
   
+  let expr = ''
   switch (operator) {
     case '==':
-      return `${field} == '${value}'`
+      expr = `${field} == '${value}'`
+      break
     case '!=':
-      return `${field} != '${value}'`
+      expr = `${field} != '${value}'`
+      break
     case '>':
-      return `${field} > ${value}`
+      expr = `${field} > ${value}`
+      break
     case '>=':
-      return `${field} >= ${value}`
+      expr = `${field} >= ${value}`
+      break
     case '<':
-      return `${field} < ${value}`
+      expr = `${field} < ${value}`
+      break
     case '<=':
-      return `${field} <= ${value}`
+      expr = `${field} <= ${value}`
+      break
     case 'contains':
-      return `${field}.contains('${value}')`
+      expr = `${field}.contains('${value}')`
+      break
     case '!contains':
-      return `!${field}.contains('${value}')`
+      expr = `!${field}.contains('${value}')`
+      break
     case 'empty':
-      return `${field} == null || ${field} == ''`
+      expr = `${field} == null || ${field} == ''`
+      break
     case '!empty':
-      return `${field} != null && ${field} != ''`
+      expr = `${field} != null && ${field} != ''`
+      break
     default:
       return null
   }
+  
+  return `\${${expr}}`
 }
 
 function saveCurrentNodeConfig(element, modeling) {

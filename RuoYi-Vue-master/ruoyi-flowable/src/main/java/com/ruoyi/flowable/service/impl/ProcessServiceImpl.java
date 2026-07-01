@@ -7,6 +7,7 @@ import com.ruoyi.flowable.domain.SysFlowCategory;
 import com.ruoyi.flowable.service.ISysFlowCategoryService;
 import com.ruoyi.flowable.service.ISysProcessCcService;
 import com.ruoyi.flowable.service.ProcessService;
+import com.ruoyi.system.service.ISysUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -51,6 +52,7 @@ public class ProcessServiceImpl implements ProcessService {
     private final HistoryService historyService;
     private final ISysFlowCategoryService categoryService;
     private final ISysProcessCcService ccService;
+    private final ISysUserService userService;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
@@ -99,25 +101,58 @@ public class ProcessServiceImpl implements ProcessService {
     @Override
     public void deployProcessDefinition(String name, String category, String bpmnXml) {
         org.flowable.bpmn.converter.BpmnXMLConverter converter = new org.flowable.bpmn.converter.BpmnXMLConverter();
-        org.flowable.bpmn.model.BpmnModel bpmnModel = converter.convertToBpmnModel(bpmnXml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        javax.xml.stream.XMLInputFactory factory = javax.xml.stream.XMLInputFactory.newInstance();
+        org.flowable.bpmn.model.BpmnModel bpmnModel = null;
+        try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bpmnXml.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+            javax.xml.stream.XMLStreamReader reader = factory.createXMLStreamReader(bais);
+            bpmnModel = converter.convertToBpmnModel(reader);
+        }catch(java.io.IOException e){
+            log.error("解析BPMN XML失败", e);
+            throw new RuntimeException("解析BPMN XML失败", e);
+        } catch (javax.xml.stream.XMLStreamException e) {
+            log.error("解析BPMN XML失败", e);
+            throw new RuntimeException("解析BPMN XML失败", e);
+        }
         
         org.flowable.image.ProcessDiagramGenerator diagramGenerator = new org.flowable.image.impl.DefaultProcessDiagramGenerator();
-        try (InputStream diagramIs = diagramGenerator.generateDiagram(
-                bpmnModel,
-                "png",
-                "宋体",
-                "宋体",
-                "宋体",
-                null,
-                1.0,
-                true)) {
-            byte[] diagramBytes = diagramIs.readAllBytes();
+        InputStream diagramIs = null;
+        try {
+            diagramIs = diagramGenerator.generateDiagram(
+                    bpmnModel,
+                    "png",
+                    "宋体",
+                    "宋体",
+                    "宋体",
+                    null,
+                    1.0,
+                    true);
+            
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = diagramIs.read(buffer)) != -1) {
+                baos.write(buffer, 0, bytesRead);
+            }
+            byte[] diagramBytes = baos.toByteArray();
+            
             repositoryService.createDeployment()
                     .name(name)
                     .category(category)
                     .addString(name + ".bpmn20.xml", bpmnXml)
                     .addBytes(name + ".png", diagramBytes)
                     .deploy();
+        } catch (java.io.IOException e) {
+            log.error("生成流程图失败", e);
+            throw new RuntimeException("生成流程图失败", e);
+        } finally {
+            if (diagramIs != null) {
+                try {
+                    diagramIs.close();
+                } catch (java.io.IOException e) {
+                    log.debug("关闭输入流失败", e);
+                }
+            }
         }
     }
 
@@ -695,6 +730,7 @@ public class ProcessServiceImpl implements ProcessService {
             info.setProcessDefinitionId(t.getProcessDefinitionId());
             info.setProcessInstanceId(t.getProcessInstanceId());
             info.setAssignee(t.getAssignee());
+            info.setAssigneeName(getUserName(t.getAssignee()));
             info.setCreateTime(t.getCreateTime());
             info.setDueDate(t.getDueDate());
             info.setPriority(t.getPriority());
@@ -920,11 +956,36 @@ public class ProcessServiceImpl implements ProcessService {
         
         taskService.setVariablesLocal(taskId, taskLocalVariables);
         
-        runtimeService.createChangeActivityStateBuilder()
-                .processInstanceId(task.getProcessInstanceId())
-                .moveActivityIdTo(task.getTaskDefinitionKey(), "startEvent")
-                .changeState();
+        String processInstanceId = task.getProcessInstanceId();
+        String processDefinitionId = task.getProcessDefinitionId();
+        
+        String targetActivityId = "startEvent";
+        try {
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService.getProcessDefinition(processDefinitionId);
+            if (pd != null) {
+                InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName());
+                if (is != null) {
+                    String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                    String currentTaskDefinitionKey = task.getTaskDefinitionKey();
+                    targetActivityId = findPreviousUserTask(xml, currentTaskDefinitionKey);
+                    if (targetActivityId == null) {
+                        targetActivityId = "startEvent";
+                    }
+                    log.info("驳回任务, 当前任务={}, 目标任务={}", currentTaskDefinitionKey, targetActivityId);
+                }
+            }
+        } catch (Exception e) {
+            log.error("查找上一个用户任务失败", e);
+        }
+        
         taskService.deleteTask(taskId, reason);
+        
+        runtimeService.createChangeActivityStateBuilder()
+                .processInstanceId(processInstanceId)
+                .moveActivityIdTo(task.getTaskDefinitionKey(), targetActivityId)
+                .changeState();
+        
+        assignFirstTask(processDefinitionId.substring(0, processDefinitionId.indexOf(':')), processInstanceId, runtimeService.getVariables(processInstanceId));
     }
 
     @Override
@@ -1138,9 +1199,10 @@ public class ProcessServiceImpl implements ProcessService {
         }
         try {
             List<Map<String, Object>> users = jdbcTemplate.queryForList(
-                "select user_name from sys_user where user_id = ?", userId);
+                "select nick_name from sys_user where user_id = ?", userId);
             if (!users.isEmpty()) {
-                return (String) users.get(0).get("user_name");
+                String nickName = (String) users.get(0).get("nick_name");
+                return nickName != null ? nickName : userId;
             }
         } catch (Exception e) {
             log.warn("查询用户名失败, userId={}", userId, e);
@@ -1169,9 +1231,13 @@ public class ProcessServiceImpl implements ProcessService {
             String xml = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             Map<String, Object> variables = runtimeService.getVariables(task.getExecutionId());
             
+            log.info("流程变量: {}", variables);
+            log.info("当前任务定义Key: {}", task.getTaskDefinitionKey());
+            
             String currentTaskDefinitionKey = task.getTaskDefinitionKey();
             
             List<String> nextNodeIds = findNextNodeIds(xml, currentTaskDefinitionKey);
+            log.info("找到下一个节点ID列表: {}", nextNodeIds);
             
             for (String nodeId : nextNodeIds) {
                 String nodeType = identifyNodeType(xml, nodeId);
@@ -1255,59 +1321,135 @@ public class ProcessServiceImpl implements ProcessService {
         return null;
     }
 
-    private String extractConditionExpression(String xml, String seqFlowId) {
-        if (seqFlowId == null) {
+    private List<String> findPreviousNodeIds(String xml, String targetNodeId) {
+        List<String> result = new ArrayList<>();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+            "<bpmn:sequenceFlow\\s+[^>]*sourceRef=\"([^\"]*)\"[^>]*targetRef=\"" + targetNodeId + "\"");
+        java.util.regex.Matcher matcher = pattern.matcher(xml);
+        while (matcher.find()) {
+            result.add(matcher.group(1));
+        }
+        return result;
+    }
+
+    private String findPreviousUserTask(String xml, String currentNodeId) {
+        if (currentNodeId == null || currentNodeId.isEmpty()) {
             return null;
         }
+
+        List<String> previousNodeIds = findPreviousNodeIds(xml, currentNodeId);
+        for (String nodeId : previousNodeIds) {
+            String nodeType = identifyNodeType(xml, nodeId);
+            if ("userTask".equals(nodeType)) {
+                return nodeId;
+            } else if ("exclusiveGateway".equals(nodeType) || "parallelGateway".equals(nodeType) || "inclusiveGateway".equals(nodeType)) {
+                String prev = findPreviousUserTask(xml, nodeId);
+                if (prev != null) {
+                    return prev;
+                }
+            } else if ("startEvent".equals(nodeType)) {
+                return nodeId;
+            }
+        }
+
+        return extractStartEventId(xml);
+    }
+
+    private String extractConditionExpression(String xml, String seqFlowId) {
+        if (seqFlowId == null) {
+            log.info("seqFlowId为空，无法提取条件表达式");
+            return null;
+        }
+        log.info("尝试提取条件表达式, seqFlowId={}", seqFlowId);
+        
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-            "<bpmn:sequenceFlow\\s+[^>]*id=\"" + seqFlowId + "\"[^>]*>([\\s\\S]*?)</bpmn:sequenceFlow>");
+            "<bpmn:sequenceFlow\\s+[^>]*id=\"" + seqFlowId + "\"([^>]*)>([\\s\\S]*?)</bpmn:sequenceFlow>");
         java.util.regex.Matcher matcher = pattern.matcher(xml);
         if (matcher.find()) {
-            String content = matcher.group(1);
+            String attrs = matcher.group(1);
+            String content = matcher.group(2);
+            log.info("找到sequenceFlow标签, attrs={}, content长度={}", attrs != null ? attrs.length() : 0, content != null ? content.length() : 0);
+            
+            String conditionField = null;
+            java.util.regex.Pattern configPattern = java.util.regex.Pattern.compile(
+                "flowable:conditionConfig=\"([^\"]*)\"");
+            java.util.regex.Matcher configMatcher = configPattern.matcher(attrs);
+            if (configMatcher.find()) {
+                try {
+                    String configJson = configMatcher.group(1).replace("&quot;", "\"");
+                    com.alibaba.fastjson2.JSONObject config = com.alibaba.fastjson2.JSON.parseObject(configJson);
+                    conditionField = config.getString("conditionField");
+                    log.info("从conditionConfig获取字段名: {}", conditionField);
+                } catch (Exception e) {
+                    log.debug("解析conditionConfig失败", e);
+                }
+            } else {
+                log.info("未找到flowable:conditionConfig属性");
+            }
+            
             java.util.regex.Pattern conditionPattern = java.util.regex.Pattern.compile(
                 "<bpmn:conditionExpression[^>]*>([\\s\\S]*?)</bpmn:conditionExpression>");
             java.util.regex.Matcher conditionMatcher = conditionPattern.matcher(content);
             if (conditionMatcher.find()) {
-                return conditionMatcher.group(1).trim();
+                String condition = conditionMatcher.group(1).trim();
+                log.info("提取到条件表达式: {}", condition);
+                if (conditionField != null && !conditionField.isEmpty()) {
+                    java.util.regex.Pattern labelPattern = java.util.regex.Pattern.compile(
+                        "\\$\\{\\s*([^\\s=<>!]+)\\s*[=<>!]");
+                    java.util.regex.Matcher labelMatcher = labelPattern.matcher(condition);
+                    if (labelMatcher.find()) {
+                        String oldField = labelMatcher.group(1);
+                        if (!oldField.equals(conditionField)) {
+                            condition = condition.replace(oldField, conditionField);
+                            log.info("替换条件表达式中的字段名: {} -> {}", oldField, conditionField);
+                        }
+                    }
+                }
+                return condition;
+            } else {
+                log.info("未找到conditionExpression标签");
+                // 尝试从属性中提取条件
+                java.util.regex.Pattern attrConditionPattern = java.util.regex.Pattern.compile(
+                    "flowable:conditionExpression=\"([^\"]*)\"");
+                java.util.regex.Matcher attrConditionMatcher = attrConditionPattern.matcher(attrs);
+                if (attrConditionMatcher.find()) {
+                    String condition = attrConditionMatcher.group(1).replace("&quot;", "\"");
+                    log.info("从属性中提取到条件表达式: {}", condition);
+                    return condition;
+                }
             }
+        } else {
+            log.info("未找到sequenceFlow标签, seqFlowId={}", seqFlowId);
         }
         return null;
     }
 
     private boolean evaluateCondition(String condition, Map<String, Object> variables) {
         if (condition == null || condition.isEmpty()) {
+            log.info("条件表达式为空，默认通过");
             return true;
         }
         
         String expr = condition.trim();
-        // 替换 ${variableName} 为实际值
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\$\\{([^}]+)\\}");
-        java.util.regex.Matcher matcher = pattern.matcher(expr);
-        StringBuilder sb = new StringBuilder();
-        while (matcher.find()) {
-            String varName = matcher.group(1).trim();
-            Object value = variables.get(varName);
-            String replacement;
-            if (value == null) {
-                replacement = "null";
-            } else if (value instanceof String) {
-                replacement = "'" + value.toString().replace("'", "\\'") + "'";
-            } else {
-                replacement = value.toString();
-            }
-            matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(replacement));
+        log.info("原始条件表达式: {}", expr);
+        
+        // 去除外层 ${} 包裹
+        if (expr.startsWith("${") && expr.endsWith("}")) {
+            expr = expr.substring(2, expr.length() - 1);
         }
-        matcher.appendTail(sb);
-        expr = sb.toString();
+        log.info("去除${}后的表达式: {}", expr);
+        log.info("流程变量: {}", variables);
         
         try {
             org.springframework.expression.ExpressionParser parser = new org.springframework.expression.spel.standard.SpelExpressionParser();
             org.springframework.expression.EvaluationContext context = new org.springframework.expression.spel.support.StandardEvaluationContext();
             for (Map.Entry<String, Object> entry : variables.entrySet()) {
                 context.setVariable(entry.getKey(), entry.getValue());
+                log.info("设置变量: {} = {}", entry.getKey(), entry.getValue());
             }
             org.springframework.expression.Expression exp = parser.parseExpression(expr);
             Boolean result = exp.getValue(context, Boolean.class);
+            log.info("条件表达式评估结果: {}", result);
             return Boolean.TRUE.equals(result);
         } catch (Exception e) {
             log.warn("条件表达式计算失败, expr={}", expr, e);
