@@ -112,6 +112,7 @@
 import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import request from '@/utils/request'
 import {
    listProcessDefinition,
    deployProcess,
@@ -307,7 +308,13 @@ function cancelStart() {
 
 async function handleDiagram(row) {
    try {
-      diagramXml.value = process.env.VUE_APP_BASE_API + `/flowable/process/diagram/${row.id}`
+      const res = await request({
+         url: `/flowable/process/diagram/${row.id}`,
+         method: 'get',
+         responseType: 'blob'
+      })
+      const blob = new Blob([res], { type: 'image/png' })
+      diagramXml.value = URL.createObjectURL(blob)
       diagramOpen.value = true
    } catch (error) {
       proxy.$modal.msgError('获取流程图失败')

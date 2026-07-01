@@ -10,6 +10,10 @@ import com.ruoyi.flowable.domain.TaskInfo;
 import com.ruoyi.flowable.service.ProcessService;
 import com.ruoyi.flowable.service.ISysProcessAttachmentService;
 import lombok.RequiredArgsConstructor;
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.engine.RepositoryService;
+import org.flowable.image.ProcessDiagramGenerator;
+import org.flowable.image.impl.DefaultProcessDiagramGenerator;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +35,7 @@ public class ProcessController extends BaseController {
 
     private final ProcessService processService;
     private final ISysProcessAttachmentService attachmentService;
+    private final RepositoryService repositoryService;
 
     /**
      * 查询流程定义列表
@@ -203,11 +208,30 @@ public class ProcessController extends BaseController {
             response.setStatus(404);
             return;
         }
+        
         InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getDiagramResourceName());
+        
         if (is == null) {
+            BpmnModel bpmnModel = repositoryService.getBpmnModel(pd.getId());
+            if (bpmnModel != null) {
+                ProcessDiagramGenerator diagramGenerator = new DefaultProcessDiagramGenerator();
+                InputStream diagramIs = diagramGenerator.generateDiagram(
+                        bpmnModel,
+                        "png",
+                        "宋体",
+                        "宋体",
+                        "宋体",
+                        null,
+                        1.0,
+                        true);
+                response.setContentType("image/png");
+                org.springframework.util.StreamUtils.copy(diagramIs, response.getOutputStream());
+                return;
+            }
             response.setStatus(404);
             return;
         }
+        
         response.setContentType("image/png");
         org.springframework.util.StreamUtils.copy(is, response.getOutputStream());
     }

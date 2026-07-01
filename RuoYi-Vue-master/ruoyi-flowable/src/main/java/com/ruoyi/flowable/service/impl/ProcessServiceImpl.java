@@ -98,11 +98,27 @@ public class ProcessServiceImpl implements ProcessService {
 
     @Override
     public void deployProcessDefinition(String name, String category, String bpmnXml) {
-        repositoryService.createDeployment()
-                .name(name)
-                .category(category)
-                .addString(name + ".bpmn20.xml", bpmnXml)
-                .deploy();
+        org.flowable.bpmn.converter.BpmnXMLConverter converter = new org.flowable.bpmn.converter.BpmnXMLConverter();
+        org.flowable.bpmn.model.BpmnModel bpmnModel = converter.convertToBpmnModel(bpmnXml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        
+        org.flowable.image.ProcessDiagramGenerator diagramGenerator = new org.flowable.image.impl.DefaultProcessDiagramGenerator();
+        try (InputStream diagramIs = diagramGenerator.generateDiagram(
+                bpmnModel,
+                "png",
+                "宋体",
+                "宋体",
+                "宋体",
+                null,
+                1.0,
+                true)) {
+            byte[] diagramBytes = diagramIs.readAllBytes();
+            repositoryService.createDeployment()
+                    .name(name)
+                    .category(category)
+                    .addString(name + ".bpmn20.xml", bpmnXml)
+                    .addBytes(name + ".png", diagramBytes)
+                    .deploy();
+        }
     }
 
     @Override
