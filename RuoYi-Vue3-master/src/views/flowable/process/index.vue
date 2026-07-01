@@ -79,7 +79,8 @@
 
       <!-- 流程图对话框 -->
       <el-dialog v-model="diagramOpen" title="流程图" width="80%" top="5vh" append-to-body>
-         <div v-html="diagramXml" class="diagram-container"></div>
+         <img v-if="diagramXml" :src="diagramXml" class="diagram-container" />
+         <div v-else class="diagram-container">暂无流程图</div>
       </el-dialog>
 
       <!-- 绑定表单对话框 -->
@@ -306,8 +307,7 @@ function cancelStart() {
 
 async function handleDiagram(row) {
    try {
-      const res = await getProcessDiagram(row.id)
-      diagramXml.value = res.data?.xml || '<div>暂无流程图</div>'
+      diagramXml.value = process.env.VUE_APP_BASE_API + `/flowable/process/diagram/${row.id}`
       diagramOpen.value = true
    } catch (error) {
       proxy.$modal.msgError('获取流程图失败')

@@ -66,17 +66,17 @@
           <el-tab-pane label="权限" name="permission" v-if="selectedElement.type === 'bpmn:StartEvent'">
             <el-form label-width="80px" size="small" inline>
               <el-form-item label="可写字段">
-                <el-select v-model="nodeConfig.writeFields" multiple placeholder="请选择表单字段" style="width: 200px">
+                <el-select v-model="nodeConfig.writeFields" multiple placeholder="请选择表单字段" style="width: 200px" @change="handlePermissionFieldChange('writeFields')">
                   <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
                 </el-select>
               </el-form-item>
               <el-form-item label="只读字段">
-                <el-select v-model="nodeConfig.readonlyFields" multiple placeholder="请选择表单字段" style="width: 200px">
+                <el-select v-model="nodeConfig.readonlyFields" multiple placeholder="请选择表单字段" style="width: 200px" @change="handlePermissionFieldChange('readonlyFields')">
                   <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
                 </el-select>
               </el-form-item>
               <el-form-item label="隐藏字段">
-                <el-select v-model="nodeConfig.hideFields" multiple placeholder="请选择表单字段" style="width: 200px">
+                <el-select v-model="nodeConfig.hideFields" multiple placeholder="请选择表单字段" style="width: 200px" @change="handlePermissionFieldChange('hideFields')">
                   <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
                 </el-select>
               </el-form-item>
@@ -119,17 +119,17 @@
           <el-tab-pane label="权限" name="userPermission" v-if="selectedElement.type === 'bpmn:UserTask'">
             <el-form label-width="80px" size="small" inline>
               <el-form-item label="可写字段">
-                <el-select v-model="nodeConfig.writeFields" multiple placeholder="请选择表单字段" style="width: 200px">
+                <el-select v-model="nodeConfig.writeFields" multiple placeholder="请选择表单字段" style="width: 200px" @change="handlePermissionFieldChange('writeFields')">
                   <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
                 </el-select>
               </el-form-item>
               <el-form-item label="只读字段">
-                <el-select v-model="nodeConfig.readonlyFields" multiple placeholder="请选择表单字段" style="width: 200px">
+                <el-select v-model="nodeConfig.readonlyFields" multiple placeholder="请选择表单字段" style="width: 200px" @change="handlePermissionFieldChange('readonlyFields')">
                   <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
                 </el-select>
               </el-form-item>
               <el-form-item label="隐藏字段">
-                <el-select v-model="nodeConfig.hideFields" multiple placeholder="请选择表单字段" style="width: 200px">
+                <el-select v-model="nodeConfig.hideFields" multiple placeholder="请选择表单字段" style="width: 200px" @change="handlePermissionFieldChange('hideFields')">
                   <el-option v-for="field in formFields" :key="field.key" :label="field.label" :value="field.key" />
                 </el-select>
               </el-form-item>
@@ -433,6 +433,7 @@ import { listUser } from '@/api/system/user'
 import { listDept } from '@/api/system/dept'
 import { listRole } from '@/api/system/role'
 import { getProcessFormByKey } from '@/api/flowable/processForm'
+import { ElMessage } from 'element-plus'
 import { getForm } from '@/api/flowable/form'
 
 const { proxy } = getCurrentInstance()
@@ -745,6 +746,15 @@ function updateDocumentation() {
 
 async function saveProcess() {
   try {
+    // 校验权限字段互斥
+    const { writeFields, readonlyFields, hideFields } = nodeConfig.value
+    const allFields = [...writeFields, ...readonlyFields, ...hideFields]
+    const uniqueFields = new Set(allFields)
+    if (allFields.length !== uniqueFields.size) {
+      ElMessage.warning('可写字段、只读字段、隐藏字段不能选择相同的字段，请检查配置')
+      return
+    }
+
     const modeling = bpmnModeler.get('modeling')
     const elementRegistry = bpmnModeler.get('elementRegistry')
 
@@ -1418,6 +1428,23 @@ function handleCcFormComponentClick(row) {
 
 function confirmCcFormComponent() {
   ccFormComponentVisible.value = false
+}
+
+function handlePermissionFieldChange(fieldType) {
+  const writeFields = nodeConfig.value.writeFields || []
+  const readonlyFields = nodeConfig.value.readonlyFields || []
+  const hideFields = nodeConfig.value.hideFields || []
+  
+  if (fieldType === 'writeFields') {
+    nodeConfig.value.readonlyFields = readonlyFields.filter(f => !writeFields.includes(f))
+    nodeConfig.value.hideFields = hideFields.filter(f => !writeFields.includes(f))
+  } else if (fieldType === 'readonlyFields') {
+    nodeConfig.value.writeFields = writeFields.filter(f => !readonlyFields.includes(f))
+    nodeConfig.value.hideFields = hideFields.filter(f => !readonlyFields.includes(f))
+  } else if (fieldType === 'hideFields') {
+    nodeConfig.value.writeFields = writeFields.filter(f => !hideFields.includes(f))
+    nodeConfig.value.readonlyFields = readonlyFields.filter(f => !hideFields.includes(f))
+  }
 }
 </script>
 

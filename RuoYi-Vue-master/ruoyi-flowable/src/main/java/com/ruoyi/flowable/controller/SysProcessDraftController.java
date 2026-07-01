@@ -71,6 +71,14 @@ public class SysProcessDraftController
     @DeleteMapping("/{id}")
     public AjaxResult remove(@PathVariable Long id)
     {
+        SysUser user = SecurityUtils.getLoginUser().getUser();
+        SysProcessDraft draft = sysProcessDraftService.selectSysProcessDraftById(id);
+        if (draft == null) {
+            return AjaxResult.error("草稿不存在");
+        }
+        if (!String.valueOf(user.getUserId()).equals(draft.getCreateBy())) {
+            return AjaxResult.error("无权删除他人的草稿");
+        }
         return sysProcessDraftService.deleteSysProcessDraftById(id) > 0 ? AjaxResult.success("删除成功") : AjaxResult.error("删除失败");
     }
 
@@ -80,6 +88,13 @@ public class SysProcessDraftController
     @DeleteMapping("/batch")
     public AjaxResult batchRemove(@RequestBody Long[] ids)
     {
+        SysUser user = SecurityUtils.getLoginUser().getUser();
+        for (Long id : ids) {
+            SysProcessDraft draft = sysProcessDraftService.selectSysProcessDraftById(id);
+            if (draft == null || !String.valueOf(user.getUserId()).equals(draft.getCreateBy())) {
+                return AjaxResult.error("存在无权删除的草稿");
+            }
+        }
         return sysProcessDraftService.deleteSysProcessDraftByIds(ids) > 0 ? AjaxResult.success("删除成功") : AjaxResult.error("删除失败");
     }
 }

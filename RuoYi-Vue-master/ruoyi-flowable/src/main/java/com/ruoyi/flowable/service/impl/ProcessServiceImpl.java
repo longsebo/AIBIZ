@@ -711,12 +711,16 @@ public class ProcessServiceImpl implements ProcessService {
         String comment = (String) variables.remove("comment");
         String action = (String) variables.remove("action");
         
-        // 将评论信息保存到流程变量中，便于历史查询
+        // 将评论信息保存为任务局部变量，便于历史查询
+        java.util.Map<String, Object> taskLocalVariables = new java.util.HashMap<>();
         if (comment != null && !comment.isEmpty()) {
-            variables.put("_COMMENT", comment);
+            taskLocalVariables.put("_COMMENT", comment);
         }
         if (action != null) {
-            variables.put("_ACTION", action);
+            taskLocalVariables.put("_ACTION", action);
+        }
+        if (!taskLocalVariables.isEmpty()) {
+            taskService.setVariablesLocal(taskId, taskLocalVariables);
         }
         
         String processDefinitionKey = task.getProcessDefinitionId().split(":")[0];
@@ -892,13 +896,13 @@ public class ProcessServiceImpl implements ProcessService {
             return;
         }
         
-        java.util.Map<String, Object> variables = new java.util.HashMap<>();
+        java.util.Map<String, Object> taskLocalVariables = new java.util.HashMap<>();
         if (reason != null && !reason.isEmpty()) {
-            variables.put("_COMMENT", reason);
+            taskLocalVariables.put("_COMMENT", reason);
         }
-        variables.put("_ACTION", "reject");
+        taskLocalVariables.put("_ACTION", "reject");
         
-        runtimeService.setVariables(task.getExecutionId(), variables);
+        taskService.setVariablesLocal(taskId, taskLocalVariables);
         
         runtimeService.createChangeActivityStateBuilder()
                 .processInstanceId(task.getProcessInstanceId())

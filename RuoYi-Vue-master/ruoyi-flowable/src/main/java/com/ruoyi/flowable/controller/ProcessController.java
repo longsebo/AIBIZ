@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -195,11 +197,19 @@ public class ProcessController extends BaseController {
      */
     @PreAuthorize("@ss.hasPermi('flowable:process:query')")
     @GetMapping("/diagram/{processDefinitionId}")
-    public AjaxResult diagram(@PathVariable String processDefinitionId) {
-        String xml = processService.getProcessDiagram(processDefinitionId);
-        Map<String, Object> data = new HashMap<>();
-        data.put("xml", xml);
-        return success(data);
+    public void diagram(@PathVariable String processDefinitionId, jakarta.servlet.http.HttpServletResponse response) throws IOException {
+        org.flowable.engine.repository.ProcessDefinition pd = repositoryService.getProcessDefinition(processDefinitionId);
+        if (pd == null) {
+            response.setStatus(404);
+            return;
+        }
+        InputStream is = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getDiagramResourceName());
+        if (is == null) {
+            response.setStatus(404);
+            return;
+        }
+        response.setContentType("image/png");
+        org.springframework.util.StreamUtils.copy(is, response.getOutputStream());
     }
 
     /**

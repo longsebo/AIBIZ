@@ -1,10 +1,7 @@
 <template>
   <el-dialog v-model="dialogVisible" :title="'待办任务 - ' + taskDetail.taskName" width="800px" append-to-body>
-    <div v-if="loading" class="loading-container">
-      <el-loading :text="'加载中...'" />
-    </div>
-
-    <template v-else>
+    <div v-loading="loading" element-loading-text="加载中..." class="dialog-content">
+      <div v-if="!loading">
       <div class="form-section">
         <div class="section-title">
           <i class="el-icon-document" />
@@ -68,29 +65,6 @@
         </div>
       </div>
 
-      <div class="next-node-section">
-        <div class="section-title">
-          <i class="el-icon-arrow-right" />
-          <span>下一节点</span>
-        </div>
-        <div v-if="taskDetail.nextNodes && taskDetail.nextNodes.length > 0" class="next-nodes-list">
-          <div v-for="node in taskDetail.nextNodes" :key="node.nodeId" class="next-node-item">
-            <div class="node-info">
-              <span class="node-name">{{ node.nodeName }}</span>
-              <span v-if="node.nodeType === 'endEvent'" class="node-type end">结束节点</span>
-              <span v-else class="node-type">用户任务</span>
-            </div>
-            <div v-if="node.assigneeNames && node.assigneeNames.length > 0" class="node-assignees">
-              <span class="assignee-label">审批人：</span>
-              <span class="assignee-names">{{ node.assigneeNames.join('、') }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-else class="empty-next-nodes">
-          无法获取下一节点信息
-        </div>
-      </div>
-
       <div class="comment-input-section">
         <el-form-item label="审批意见" label-width="120px">
           <el-input
@@ -101,7 +75,8 @@
           />
         </el-form-item>
       </div>
-    </template>
+    </div>
+  </div>
 
     <template #footer>
       <div class="dialog-footer">
@@ -383,9 +358,14 @@ function handleClose() {
 }
 
 .comment-group {
-  margin-bottom: 15px;
-  border: 1px solid #ebf0f5;
-  border-radius: 4px;
+  margin-bottom: 20px;
+  border-left: 3px solid #409eff;
+  padding-left: 15px;
+  background: #fafafa;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-right: 10px;
+  border-radius: 0 4px 4px 0;
 }
 
 .group-title {

@@ -162,12 +162,25 @@ const visibleComponents = computed(() => {
       }).map(child => {
         const childField = child.field || child.id?.toString()
         const childFullField = comp.label ? `${comp.label}-${child.label || childField}` : childField
-        let childDisabled = disabled
-        if (!disabled && writeFields.length > 0) {
-          childDisabled = !writeFields.includes(childField) && !writeFields.includes(childFullField)
-        } else if (!disabled && readonlyFields.length > 0) {
-          childDisabled = readonlyFields.includes(childField) || readonlyFields.includes(childFullField)
+        let childDisabled = false
+        
+        if (hideFields.includes(childField) || hideFields.includes(childFullField)) {
+          childDisabled = true
+        } else if (writeFields.length > 0) {
+          if (writeFields.includes(childField) || writeFields.includes(childFullField)) {
+            childDisabled = false
+          } else if (writeFields.includes(field) || writeFields.includes(fullField)) {
+            childDisabled = false
+          } else if (writeFields.includes(comp.label)) {
+            childDisabled = false
+          } else {
+            childDisabled = true
+          }
+        } else if (readonlyFields.length > 0) {
+          childDisabled = readonlyFields.includes(childField) || readonlyFields.includes(childFullField) ||
+                         readonlyFields.includes(field) || readonlyFields.includes(fullField)
         }
+        
         return { ...child, _disabled: childDisabled }
       })
     }
