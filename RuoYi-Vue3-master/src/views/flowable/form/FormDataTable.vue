@@ -102,11 +102,13 @@ const editForm = ref({})
 const editIndex = ref(-1)
 
 function handleAdd() {
+  editIndex.value = -1
   const newRow = {}
   props.columns.forEach(col => {
     newRow[col.prop] = ''
   })
-  tableData.value = [...tableData.value, newRow]
+  editForm.value = newRow
+  editVisible.value = true
 }
 
 function handleEdit(row) {
@@ -121,9 +123,13 @@ function handleDelete(index) {
 }
 
 function handleSave() {
-  const newData = [...tableData.value]
-  newData[editIndex.value] = { ...editForm.value }
-  tableData.value = newData
+  if (editIndex.value === -1) {
+    tableData.value = [...tableData.value, { ...editForm.value }]
+  } else {
+    const newData = [...tableData.value]
+    newData[editIndex.value] = { ...editForm.value }
+    tableData.value = newData
+  }
   editVisible.value = false
 }
 </script>
